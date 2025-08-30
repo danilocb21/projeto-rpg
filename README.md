@@ -43,7 +43,7 @@ Walk up to the NPC, press Space to interact, defeat it in battle mode, reach the
 
 [@williamdants62](https://github.com/williamdants62): artist, programmer.
 
-.
+[@RicardinhoGplays] (https://github.com/RicardinhoGplays): artist, programming assistant.
 
 .
 
