@@ -31,7 +31,9 @@ Project is: _in progress_.
 ![PLACEHOLDER](./img/placeholder.png)
 
 ## Setup
-Explain here the setup, I don't know what's necessary for our program to run, honestly.
+For this program to work, you will need a C/C++ compiler. We recommend [_MinGW_](https://sourceforge.net/projects/mingw/), which is the one we used. Keep your eyes on the said architeture, 32-bits version is needed.
+Install the compiler on the official page, run the executable, and download via MingGW Installation Manager the C compatibility.
+Then, you just need to open CMD/PowerShell, and type "mingw32-make run" on the downloaded repository root file.
 
 ## Usage
 WASD to walk, Spacebar to interact.
