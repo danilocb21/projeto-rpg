@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "*.embeddedhtml": "html",
+        "sdl.h": "c"
+    },
+    "makefile.configureOnOpen": false
+}
