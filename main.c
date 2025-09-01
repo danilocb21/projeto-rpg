@@ -1,8 +1,50 @@
 #include <stdio.h>
-#include "SDL2/SDL.h"   
+#include "SDL2/SDL.h" 
+#include <stdbool.h> 
 
-int main(int argc, char* argv[]) {
-    SDL_Init(SDL_INIT_VIDEO);
+#define SCREEN_WIDTH 640
+#define SCREEN_LENGTH 480
+
+int main(int argc, char* argv[]) {  
+    
+    if(SDL_Init(SDL_INIT_VIDEO) < 0) {
+        printf("Erro ao inicializar o SDL2: '%s'.", SDL_GetError());
+        return 1;
+    }
+
+    SDL_Window* janela = SDL_CreateWindow("Teste: Python é do caralho", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, SCREEN_WIDTH * 2, SCREEN_LENGTH * 2, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
+    if(janela == NULL) {
+        printf("Erro ao criar janela: '%s'.", SDL_GetError());
+    }
+
+    SDL_Renderer* renderizador = SDL_CreateRenderer(janela, -1, SDL_RENDERER_ACCELERATED);
+    if(renderizador == NULL) {
+        printf("Erro ao carregar renderizador: '%s'.", SDL_GetError());
+    }
+
+    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
+
+    SDL_RenderSetLogicalSize(renderizador, SCREEN_WIDTH, SCREEN_LENGTH); // Isso é para a gente trabalhar em um canva 640x480, devido aos sprites em baixa resolução.
+
+    bool rodando = true;
+    SDL_Event evento;
+
+    while(rodando) {
+        while(SDL_PollEvent(&evento)) {
+            if(evento.type == SDL_QUIT) {
+                rodando = false;
+            }
+        }
+
+        SDL_SetRenderDrawColor(renderizador, 0, 0, 0, 255);
+        SDL_RenderClear(renderizador);
+        SDL_RenderPresent(renderizador);
+
+    }
+
+    SDL_DestroyRenderer(renderizador);
+    SDL_DestroyWindow(janela);
     SDL_Quit();
+
     return 0;
 }
