@@ -6,11 +6,18 @@ SRC_DIR = .
 INCLUDE_DIR = src/include
 LIB_DIR = src/lib
 
-# Flags de compilação
-CFLAGS = -I$(INCLUDE_DIR) -Wall -Wextra
+# Detecta SO
+PKG_SDL2_CFLAGS := $(shell pkg-config --cflags sdl2 2>/dev/null)
+PKG_SDL2_LIBS   := $(shell pkg-config --libs sdl2 2>/dev/null)
 
-# Flags de linker (ordem correta para SDL2 com MinGW)
-LDFLAGS = -L$(LIB_DIR) -lmingw32 -lSDL2main -lSDL2 -mwindows
+ifeq ($(OS),Windows_NT)
+  CFLAGS  = -I$(INCLUDE_DIR) -Wall -Wextra
+  LDFLAGS = -L$(LIB_DIR) -lmingw32 -lSDL2main -lSDL2 -mwindows
+  RUN_DEPS = copy-dll
+else
+  CFLAGS  = -I$(INCLUDE_DIR) -Wall -Wextra $(PKG_SDL2_CFLAGS)
+  LDFLAGS = $(if $(PKG_SDL2_LIBS),$(PKG_SDL2_LIBS),-lSDL2)
+endif
 
 # Nome do executável
 TARGET = c_tale.exe
@@ -34,3 +41,5 @@ run: $(TARGET)
 	./$(TARGET)
 
 .PHONY: all clean run
+PKG_SDL2_CFLAGS := $(shell pkg-config --cflags sdl2 2>/dev/null)
+PKG_SDL2_LIBS   := $(shell pkg-config --libs sdl2 2>/dev/null)
