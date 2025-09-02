@@ -51,7 +51,7 @@ Or (if you changed the mingw32-make.exe to make.exe, which makes it easier to ty
 
 __Commands:__
 
-> sudo apt update && sudo apt install pkg-config libsdl2-dev
+> sudo apt update && sudo apt install -y libsdl2-dev libsdl2-image-dev pkg-config
 
 If you don't have GCC and Make:
 
