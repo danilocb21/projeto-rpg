@@ -21,6 +21,7 @@ A 2D RPG based off Undertale, made with <a href="https://wiki.libsdl.org/SDL2">S
 Project is: _in progress_.
 
 ## Roadmap
+- [ ] Sprites
 - [ ] Character movement
 - [ ] NPC interaction
 - [ ] Battle system
@@ -31,9 +32,11 @@ Project is: _in progress_.
 ![PLACEHOLDER](./img/placeholder.png)
 
 ## Setup
-For this program to work, you will need a C/C++ compiler. We recommend [_MinGW_](https://sourceforge.net/projects/mingw/), which is the one we used. Keep your eyes on the said architeture, 32-bits version is needed.
+- Windows: For this program to work, you will need a C/C++ compiler. We recommend [_MinGW_](https://sourceforge.net/projects/mingw/), which is the one we used. Keep your eyes on the said architeture, 32-bits version is needed.
 Install the compiler on the official page, run the executable, and download via MingGW Installation Manager the C compatibility.
 Then, you just need to open CMD/PowerShell, and type "mingw32-make run" on the downloaded repository root file.
+
+- Linux: just compile the code with the makefile command, execute the .exe file, and have fun.
 
 ## Usage
 WASD to walk, Spacebar to interact.
