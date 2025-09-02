@@ -5,7 +5,7 @@
   <img alt="Static Badge" src="https://img.shields.io/badge/Language-blue?style=for-the-badge&logo=c">
 </p>
 <p align="center">
-🐍 A 2D RPG based off Undertale, made with <a href="https://wiki.libsdl.org/SDL2">SDL2</a> A short humoristic rip-off for an university project. 🐍
+🐍 A 2D RPG based off Undertale, made with <a href="https://wiki.libsdl.org/SDL2">SDL2</a>. A short humoristic rip-off for an university project. 🐍
 </p>
 
 ## 👾 Table of Contents
