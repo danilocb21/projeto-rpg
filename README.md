@@ -36,7 +36,7 @@ Project is: _in progress_.
 Install the compiler on the official page, run the executable, and download via MingGW Installation Manager the C compatibility.
 Then, you just need to open CMD/PowerShell, and type "mingw32-make run" on the downloaded repository root file.
 
-- __Linux:__ Just compile the code with the makefile command, execute the .exe file, and have fun.
+- __Linux:__ First, install/update the SDL2 library with sudo apt update && sudo apt install pkg-config libsdl2-dev on the console. Then, just compile the code with the makefile command, execute the .exe file, and have fun. (May be redundant, but you should also have GCC and Make support installed).
 
 ## Usage
 WASD to walk, Spacebar to interact.
