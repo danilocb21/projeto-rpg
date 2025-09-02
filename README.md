@@ -36,7 +36,7 @@ Project is: _in progress_.
 Install the compiler on the official page, run the executable, and download via MingGW Installation Manager the C compatibility.
 Then, you just need to open CMD/PowerShell, and type "mingw32-make run" on the downloaded repository root file.
 
-- Linux: just compile the code with the makefile command, execute the .exe file, and have fun.
+- Linux: Just compile the code with the makefile command, execute the .exe file, and have fun.
 
 ## Usage
 WASD to walk, Spacebar to interact.
