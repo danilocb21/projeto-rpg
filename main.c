@@ -9,7 +9,7 @@
 #define SCREEN_WIDTH 640
 #define SCREEN_HEIGHT 480
 
-#define WINDOW_FLAGS (SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE)
+#define WINDOW_FLAGS SDL_WINDOW_SHOWN
 #define RENDERER_FLAGS (SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC)
 #define IMAGE_FLAGS (IMG_INIT_PNG)
 #define MIXER_FLAGS (MIX_INIT_MP3 | MIX_INIT_OGG)
@@ -53,7 +53,7 @@ int main(int argc, char* argv[]) {
     Character meneghetti = {
         .texture = criarTextura(game.renderer, "assets/sprites/characters/sprite-meneghetti-stopped.png"),
         .colision = {(SCREEN_WIDTH / 2) - 10, (SCREEN_HEIGHT / 2) - 16, 19, 32},
-        .sprite_vel = 3,
+        .sprite_vel = 4, // Deve ser par.
         .keystate = SDL_GetKeyboardState(NULL),
     };
     Character scenario = {
@@ -202,7 +202,7 @@ void sprite_update(Character *scenario, Character *player) {
         player->colision.y -= speed;
     }
 
-    if (keys[SDL_SCANCODE_S] && scenario->colision.y > SCREEN_HEIGHT - scenario->colision.h && player->colision.y > (SCREEN_HEIGHT / 2) - 16) {
+    if (keys[SDL_SCANCODE_S] && scenario->colision.y > -SCREEN_HEIGHT && player->colision.y > (SCREEN_HEIGHT / 2) - 16) {
         scenario->colision.y -= speed;
     } else if (keys[SDL_SCANCODE_S] && player->colision.y < SCREEN_HEIGHT - player->colision.h) {
         player->colision.y += speed;
@@ -214,7 +214,7 @@ void sprite_update(Character *scenario, Character *player) {
         player->colision.x -= speed;
     }
 
-    if (keys[SDL_SCANCODE_D] && scenario->colision.x > SCREEN_WIDTH - scenario->colision.w && player->colision.x > (SCREEN_WIDTH / 2) - 10) {
+    if (keys[SDL_SCANCODE_D] && scenario->colision.x > -SCREEN_WIDTH && player->colision.x > (SCREEN_WIDTH / 2) - 10) {
         scenario->colision.x -= speed;
     } else if (keys[SDL_SCANCODE_D] && player->colision.x < SCREEN_WIDTH - player->colision.w) {
         player->colision.x += speed;
