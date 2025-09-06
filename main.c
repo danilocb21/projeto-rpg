@@ -1,10 +1,10 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <math.h>
-#include "SDL2/SDL.h"
-#include "SDL2/SDL_image.h"
-#include "SDL2/SDL_ttf.h"
-#include "SDL2/SDL_mixer.h"
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_image.h>
+#include <SDL2/SDL_ttf.h>
+#include <SDL2/SDL_mixer.h>
 
 #define SCREEN_WIDTH 640
 #define SCREEN_HEIGHT 480
@@ -34,7 +34,10 @@ void game_cleanup(Game *game, int exit_status);
 SDL_Texture *criarTextura(SDL_Renderer *render, const char *dir);
 void sprite_update(Character *scenario, Character *player);
 
-int main(void) {
+int main(int argc, char* argv[]) {
+    (void) argc;
+    (void) argv;
+
     Game game = {
         .renderer = NULL,
         .window = NULL,
@@ -49,7 +52,7 @@ int main(void) {
     // OBJETOS:
     Character meneghetti = {
         .texture = criarTextura(game.renderer, "assets/sprites/characters/sprite-meneghetti-stopped.png"),
-        .colision = {(SCREEN_WIDTH / 2) - 16, (SCREEN_HEIGHT / 2) - 16, 32, 32},
+        .colision = {(SCREEN_WIDTH / 2) - 10, (SCREEN_HEIGHT / 2) - 16, 19, 32},
         .sprite_vel = 3,
         .keystate = SDL_GetKeyboardState(NULL),
     };
@@ -140,6 +143,14 @@ bool sdl_initialize(Game *game) {
         fprintf(stderr, "Error creating renderer: %s\n", SDL_GetError());
         return true;
     }
+
+    SDL_Surface* icon = SDL_LoadBMP("assets/sprites/misc/icon.bmp");
+    if(!icon) {
+        fprintf(stderr, "Error loading icon: %s\n", SDL_GetError());
+        return true;
+    }
+    SDL_SetWindowIcon(game->window, icon);
+    SDL_FreeSurface(icon);
 
     return false;
 }

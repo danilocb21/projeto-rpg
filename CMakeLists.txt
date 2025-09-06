@@ -6,9 +6,7 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 
 find_package(PkgConfig REQUIRED)
 
-# Core SDL2
 pkg_check_modules(SDL2 REQUIRED sdl2)
-# Extra libs (install their -dev packages first)
 pkg_check_modules(SDL2_IMAGE REQUIRED SDL2_image)
 pkg_check_modules(SDL2_TTF REQUIRED SDL2_ttf)
 pkg_check_modules(SDL2_MIXER REQUIRED SDL2_mixer)
@@ -38,7 +36,6 @@ target_link_libraries(c_tale
     ${SDL2_MIXER_LIBRARIES}
 )
 
-# Optional: stricter warnings
 if (CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(c_tale PRIVATE -Wall -Wextra -Wpedantic)
 endif()
