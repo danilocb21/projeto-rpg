@@ -130,13 +130,13 @@ bool sdl_initialize(Game *game) {
     }
 
     game->window = SDL_CreateWindow(GAME_TITLE, SDL_WINDOWPOS_CENTERED,
-                                    SDL_WINDOWPOS_CENTERED, SCREEN_WIDTH, SCREEN_HEIGHT, 0);
+                                    SDL_WINDOWPOS_CENTERED, SCREEN_WIDTH, SCREEN_HEIGHT, WINDOW_FLAGS);
     if (!game->window) {
         fprintf(stderr, "Error creating window: %s\n", SDL_GetError());
         return true;
     }
 
-    game->renderer = SDL_CreateRenderer(game->window, -1, 0);
+    game->renderer = SDL_CreateRenderer(game->window, -1, RENDERER_FLAGS);
     if (!game->renderer) {
         fprintf(stderr, "Error creating renderer: %s\n", SDL_GetError());
         return true;
