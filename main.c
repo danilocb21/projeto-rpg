@@ -203,27 +203,38 @@ void sprite_update(Character *scenario, Character *player, SDL_Rect *box) {
     const Uint8 *keys = player->keystate ? player->keystate : SDL_GetKeyboardState(NULL);
     int speed = player->sprite_vel;
     
-    if (keys[SDL_SCANCODE_W] && scenario->colision.y < 0 && player->colision.y < (SCREEN_HEIGHT / 2) - 16 && !colision_check(player, box)) {
+    if (colision_check(player, box)) {
+        if (keys[SDL_SCANCODE_W])
+            player->colision.y += speed;
+        if (keys[SDL_SCANCODE_S])
+            player->colision.y -= speed;
+        if (keys[SDL_SCANCODE_A])
+            player->colision.x += speed;
+        if (keys[SDL_SCANCODE_D])
+            player->colision.x -= speed;
+    }
+
+    if (keys[SDL_SCANCODE_W] && scenario->colision.y < 0 && player->colision.y < (SCREEN_HEIGHT / 2) - 16) {
             scenario->colision.y += speed;
-    } else if (keys[SDL_SCANCODE_W] && player->colision.y > 0 && !colision_check(player, box)) {
+    } else if (keys[SDL_SCANCODE_W] && player->colision.y > 0) {
         player->colision.y -= speed;
     }
 
-    if (keys[SDL_SCANCODE_S] && scenario->colision.y > -SCREEN_HEIGHT && player->colision.y > (SCREEN_HEIGHT / 2) - 16 && !colision_check(player, box)) {
+    if (keys[SDL_SCANCODE_S] && scenario->colision.y > -SCREEN_HEIGHT && player->colision.y > (SCREEN_HEIGHT / 2) - 16) {
         scenario->colision.y -= speed;
-    } else if (keys[SDL_SCANCODE_S] && player->colision.y < SCREEN_HEIGHT - player->colision.h && !colision_check(player, box)) {
+    } else if (keys[SDL_SCANCODE_S] && player->colision.y < SCREEN_HEIGHT - player->colision.h) {
         player->colision.y += speed;
     }
 
-    if (keys[SDL_SCANCODE_A] && scenario->colision.x < 0 && player->colision.x < (SCREEN_WIDTH / 2) - 10 && !colision_check(player, box)) {
+    if (keys[SDL_SCANCODE_A] && scenario->colision.x < 0 && player->colision.x < (SCREEN_WIDTH / 2) - 10) {
         scenario->colision.x += speed;
-    } else if (keys[SDL_SCANCODE_A] && player->colision.x > 0 && !colision_check(player, box)) {
+    } else if (keys[SDL_SCANCODE_A] && player->colision.x > 0) {
         player->colision.x -= speed;
     }
 
-    if (keys[SDL_SCANCODE_D] && scenario->colision.x > -SCREEN_WIDTH && player->colision.x > (SCREEN_WIDTH / 2) - 10 && !colision_check(player, box)) {
+    if (keys[SDL_SCANCODE_D] && scenario->colision.x > -SCREEN_WIDTH && player->colision.x > (SCREEN_WIDTH / 2) - 10) {
         scenario->colision.x -= speed;
-    } else if (keys[SDL_SCANCODE_D] && player->colision.x < SCREEN_WIDTH - player->colision.w && !colision_check(player, box)) {
+    } else if (keys[SDL_SCANCODE_D] && player->colision.x < SCREEN_WIDTH - player->colision.w) {
         player->colision.x += speed;
     }
 }
