@@ -33,6 +33,7 @@ void object_cleanup(Character *obj);
 void game_cleanup(Game *game, int exit_status);
 SDL_Texture *criarTextura(SDL_Renderer *render, const char *dir);
 void sprite_update(Character *scenario, Character *player, SDL_Rect *box);
+bool colision_check(Character *player, SDL_Rect *box);
 
 int main(int argc, char* argv[]) {
     (void) argc;
@@ -84,7 +85,7 @@ int main(int argc, char* argv[]) {
         }
 
         // COLISÕES:
-        SDL_Rect lower_left_col = {scenario.colision.x, (scenario.colision.y + scenario.colision.h) - 22, 982, 220};
+        SDL_Rect lower_left_col = {scenario.colision.x, (scenario.colision.y + scenario.colision.h) - 220, 982, 220};
 
         sprite_update(&scenario, &meneghetti, &lower_left_col);
 
@@ -201,47 +202,56 @@ SDL_Texture *criarTextura(SDL_Renderer *render, const char *dir) {
 void sprite_update(Character *scenario, Character *player, SDL_Rect *box) {
     const Uint8 *keys = player->keystate ? player->keystate : SDL_GetKeyboardState(NULL);
     int speed = player->sprite_vel;
-
-    if (keys[SDL_SCANCODE_W] && scenario->colision.y < 0 && player->colision.y < (SCREEN_HEIGHT / 2) - 16) {
+    
+    if (keys[SDL_SCANCODE_W] && scenario->colision.y < 0 && player->colision.y < (SCREEN_HEIGHT / 2) - 16 && !colision_check(player, box)) {
             scenario->colision.y += speed;
-    } else if (keys[SDL_SCANCODE_W] && player->colision.y > 0) {
+    } else if (keys[SDL_SCANCODE_W] && player->colision.y > 0 && !colision_check(player, box)) {
         player->colision.y -= speed;
     }
 
-    if (keys[SDL_SCANCODE_S] && scenario->colision.y > -SCREEN_HEIGHT && player->colision.y > (SCREEN_HEIGHT / 2) - 16 && player->colision.y + player->colision.h < box->y) {
+    if (keys[SDL_SCANCODE_S] && scenario->colision.y > -SCREEN_HEIGHT && player->colision.y > (SCREEN_HEIGHT / 2) - 16 && !colision_check(player, box)) {
         scenario->colision.y -= speed;
-    } else if (keys[SDL_SCANCODE_S] && player->colision.y < SCREEN_HEIGHT - player->colision.h && player->colision.y + player->colision.h < box->y) {
+    } else if (keys[SDL_SCANCODE_S] && player->colision.y < SCREEN_HEIGHT - player->colision.h && !colision_check(player, box)) {
         player->colision.y += speed;
     }
 
-    if (keys[SDL_SCANCODE_A] && scenario->colision.x < 0 && player->colision.x < (SCREEN_WIDTH / 2) - 10) {
+    if (keys[SDL_SCANCODE_A] && scenario->colision.x < 0 && player->colision.x < (SCREEN_WIDTH / 2) - 10 && !colision_check(player, box)) {
         scenario->colision.x += speed;
-    } else if (keys[SDL_SCANCODE_A] && player->colision.x > 0) {
+    } else if (keys[SDL_SCANCODE_A] && player->colision.x > 0 && !colision_check(player, box)) {
         player->colision.x -= speed;
     }
 
-    if (keys[SDL_SCANCODE_D] && scenario->colision.x > -SCREEN_WIDTH && player->colision.x > (SCREEN_WIDTH / 2) - 10) {
+    if (keys[SDL_SCANCODE_D] && scenario->colision.x > -SCREEN_WIDTH && player->colision.x > (SCREEN_WIDTH / 2) - 10 && !colision_check(player, box)) {
         scenario->colision.x -= speed;
-    } else if (keys[SDL_SCANCODE_D] && player->colision.x < SCREEN_WIDTH - player->colision.w) {
+    } else if (keys[SDL_SCANCODE_D] && player->colision.x < SCREEN_WIDTH - player->colision.w && !colision_check(player, box)) {
         player->colision.x += speed;
     }
 }
 
 bool colision_check(Character *player, SDL_Rect *box) {
-    int top_left_player, top_left_box;
-    int top_left_player_y, top_left_box_y;
-    int top_right_player, top_right_box;
-    int bottom_left_player, bottom_left_box;
+    int leftX_player, leftX_box;
+    int topY_player, topY_box;
+    int rightX_player, rightX_box;
+    int bottomY_player, bottomY_box;
 
-    top_left_player = player->colision.x;
-    top_left_player_y = player->colision.y;
-    top_right_player = player->colision.x + player->colision.w;
-    bottom_left_player = player->colision.y + player->colision.h;
+    leftX_player = player->colision.x;
+    topY_player = player->colision.y;
+    rightX_player = player->colision.x + player->colision.w;
+    bottomY_player = player->colision.y + player->colision.h;
 
-    top_left_box = box->x;
-    top_left_box_y = box->y;
-    top_right_box = box->x + box->w;
-    bottom_left_box = box->y + box->h;
+    leftX_box = box->x;
+    topY_box = box->y;
+    rightX_box = box->x + box->w;
+    bottomY_box = box->y + box->h;
 
+    if (leftX_player >= rightX_box)
+        return false;
+    if (topY_player >= bottomY_box)
+        return false;
+    if (rightX_player <= leftX_box)
+        return false;
+    if (bottomY_player <= topY_box)
+        return false;
     
+    return true;
 }
