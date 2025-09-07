@@ -32,7 +32,7 @@ bool sdl_initialize(Game *game);
 void object_cleanup(Character *obj);
 void game_cleanup(Game *game, int exit_status);
 SDL_Texture *criarTextura(SDL_Renderer *render, const char *dir);
-void sprite_update(Character *scenario, Character *player);
+void sprite_update(Character *scenario, Character *player, SDL_Rect *box);
 
 int main(int argc, char* argv[]) {
     (void) argc;
@@ -83,7 +83,10 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        sprite_update(&scenario, &meneghetti);
+        // COLISÕES:
+        SDL_Rect lower_left_col = {scenario.colision.x, (scenario.colision.y + scenario.colision.h) - 22, 982, 220};
+
+        sprite_update(&scenario, &meneghetti, &lower_left_col);
 
         SDL_SetRenderDrawColor(game.renderer, 0, 0, 0, 255);
 
@@ -91,6 +94,9 @@ int main(int argc, char* argv[]) {
 
         SDL_RenderCopy(game.renderer, scenario.texture, NULL, &scenario.colision);
         SDL_RenderCopy(game.renderer, meneghetti.texture, NULL, &meneghetti.colision);
+
+        SDL_SetRenderDrawColor(game.renderer, 255, 255, 255, 0);
+        SDL_RenderDrawRect(game.renderer, &lower_left_col);
 
         SDL_RenderPresent(game.renderer);
 
@@ -192,19 +198,19 @@ SDL_Texture *criarTextura(SDL_Renderer *render, const char *dir) {
     return texture;
 }
 
-void sprite_update(Character *scenario, Character *player) {
+void sprite_update(Character *scenario, Character *player, SDL_Rect *box) {
     const Uint8 *keys = player->keystate ? player->keystate : SDL_GetKeyboardState(NULL);
     int speed = player->sprite_vel;
 
     if (keys[SDL_SCANCODE_W] && scenario->colision.y < 0 && player->colision.y < (SCREEN_HEIGHT / 2) - 16) {
-        scenario->colision.y += speed;
+            scenario->colision.y += speed;
     } else if (keys[SDL_SCANCODE_W] && player->colision.y > 0) {
         player->colision.y -= speed;
     }
 
-    if (keys[SDL_SCANCODE_S] && scenario->colision.y > -SCREEN_HEIGHT && player->colision.y > (SCREEN_HEIGHT / 2) - 16) {
+    if (keys[SDL_SCANCODE_S] && scenario->colision.y > -SCREEN_HEIGHT && player->colision.y > (SCREEN_HEIGHT / 2) - 16 && player->colision.y + player->colision.h < box->y) {
         scenario->colision.y -= speed;
-    } else if (keys[SDL_SCANCODE_S] && player->colision.y < SCREEN_HEIGHT - player->colision.h) {
+    } else if (keys[SDL_SCANCODE_S] && player->colision.y < SCREEN_HEIGHT - player->colision.h && player->colision.y + player->colision.h < box->y) {
         player->colision.y += speed;
     }
 
@@ -219,4 +225,23 @@ void sprite_update(Character *scenario, Character *player) {
     } else if (keys[SDL_SCANCODE_D] && player->colision.x < SCREEN_WIDTH - player->colision.w) {
         player->colision.x += speed;
     }
+}
+
+bool colision_check(Character *player, SDL_Rect *box) {
+    int top_left_player, top_left_box;
+    int top_left_player_y, top_left_box_y;
+    int top_right_player, top_right_box;
+    int bottom_left_player, bottom_left_box;
+
+    top_left_player = player->colision.x;
+    top_left_player_y = player->colision.y;
+    top_right_player = player->colision.x + player->colision.w;
+    bottom_left_player = player->colision.y + player->colision.h;
+
+    top_left_box = box->x;
+    top_left_box_y = box->y;
+    top_right_box = box->x + box->w;
+    bottom_left_box = box->y + box->h;
+
+    
 }
