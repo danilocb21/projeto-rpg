@@ -32,12 +32,14 @@ bool sdl_initialize(Game *game);
 void object_cleanup(Character *obj);
 void game_cleanup(Game *game, int exit_status);
 SDL_Texture *criarTextura(SDL_Renderer *render, const char *dir);
-void sprite_update(Character *scenario, Character *player, SDL_Rect *box);
+void sprite_update(Character *scenario, Character *player, SDL_Texture *w_texture[], SDL_Texture *s_texture[], SDL_Texture *a_texture[], SDL_Texture *d_texture[], double *timer, int counters[]);
 bool colision_check(Character *player, SDL_Rect *box);
 
 int main(int argc, char* argv[]) {
     (void) argc;
     (void) argv;
+
+    int counters[] = {0, 0, 0, 0};
 
     Game game = {
         .renderer = NULL,
@@ -50,11 +52,29 @@ int main(int argc, char* argv[]) {
     SDL_bool running = SDL_TRUE;
     SDL_Event event;
 
+    // TEXTURAS:
+    SDL_Texture* back1 = criarTextura(game.renderer, "assets/sprites/characters/meneghetti-back.png");
+    SDL_Texture* back2 = criarTextura(game.renderer, "assets/sprites/characters/meneghetti-back-1.png");
+    SDL_Texture* back3 = criarTextura(game.renderer, "assets/sprites/characters/meneghetti-back-2.png");
+    SDL_Texture* front1 = criarTextura(game.renderer, "assets/sprites/characters/meneghetti-front.png");
+    SDL_Texture* front2 = criarTextura(game.renderer, "assets/sprites/characters/meneghetti-front-1.png");
+    SDL_Texture* front3 = criarTextura(game.renderer, "assets/sprites/characters/meneghetti-front-2.png");
+    SDL_Texture* left1 = criarTextura(game.renderer, "assets/sprites/characters/meneghetti-left.png");
+    SDL_Texture* left2 = criarTextura(game.renderer, "assets/sprites/characters/meneghetti-left-1.png");
+    SDL_Texture* right1 = criarTextura(game.renderer, "assets/sprites/characters/meneghetti-right.png");
+    SDL_Texture* right2 = criarTextura(game.renderer, "assets/sprites/characters/meneghetti-right-1.png");
+
+    // PACOTES DE ANIMAÇÃO:
+    SDL_Texture* up_anim[] = {back1, back2, back3};
+    SDL_Texture* down_anim[] = {front1, front2, front3};
+    SDL_Texture* left_anim[] = {left1, left2};
+    SDL_Texture* right_anim[] = {right1, right2};
+
     // OBJETOS:
     Character meneghetti = {
-        .texture = criarTextura(game.renderer, "assets/sprites/characters/sprite-meneghetti-stopped.png"),
+        .texture = front1,
         .colision = {(SCREEN_WIDTH / 2) - 10, (SCREEN_HEIGHT / 2) - 16, 19, 32},
-        .sprite_vel = 4, // Deve ser par.
+        .sprite_vel = 2, // Deve ser par.
         .keystate = SDL_GetKeyboardState(NULL),
     };
     Character scenario = {
@@ -62,6 +82,7 @@ int main(int argc, char* argv[]) {
         .colision = {0, -SCREEN_HEIGHT, SCREEN_WIDTH * 2, SCREEN_HEIGHT * 2},
     };
 
+    double cont = 0;
     while (running) {
         while (SDL_PollEvent(&event)) {
             switch (event.type) {
@@ -87,7 +108,7 @@ int main(int argc, char* argv[]) {
         // COLISÕES:
         SDL_Rect lower_left_col = {scenario.colision.x, (scenario.colision.y + scenario.colision.h) - 220, 982, 220};
 
-        sprite_update(&scenario, &meneghetti, &lower_left_col);
+        sprite_update(&scenario, &meneghetti, up_anim, down_anim, left_anim, right_anim, &cont, counters);
 
         SDL_SetRenderDrawColor(game.renderer, 0, 0, 0, 255);
 
@@ -101,6 +122,7 @@ int main(int argc, char* argv[]) {
 
         SDL_RenderPresent(game.renderer);
 
+        cont += 0.1; // Conta a passagem dos milissegundos.
         SDL_Delay(16);
     }
 
@@ -151,7 +173,7 @@ bool sdl_initialize(Game *game) {
         return true;
     }
 
-    SDL_Surface* icon = SDL_LoadBMP("assets/sprites/misc/icon.bmp");
+    SDL_Surface* icon = SDL_LoadBMP("assets/sprites/hud/icon.bmp");
     if(!icon) {
         fprintf(stderr, "Error loading icon: %s\n", SDL_GetError());
         return true;
@@ -199,43 +221,104 @@ SDL_Texture *criarTextura(SDL_Renderer *render, const char *dir) {
     return texture;
 }
 
-void sprite_update(Character *scenario, Character *player, SDL_Rect *box) {
+void sprite_update(Character *scenario, Character *player, SDL_Texture *w_texture[], SDL_Texture *s_texture[], SDL_Texture *a_texture[], SDL_Texture *d_texture[], double *timer, int counters[]) {
     const Uint8 *keys = player->keystate ? player->keystate : SDL_GetKeyboardState(NULL);
     int speed = player->sprite_vel;
     
-    if (colision_check(player, box)) {
-        if (keys[SDL_SCANCODE_W])
-            player->colision.y += speed;
-        if (keys[SDL_SCANCODE_S])
-            player->colision.y -= speed;
-        if (keys[SDL_SCANCODE_A])
-            player->colision.x += speed;
-        if (keys[SDL_SCANCODE_D])
-            player->colision.x -= speed;
-    }
-
     if (keys[SDL_SCANCODE_W] && scenario->colision.y < 0 && player->colision.y < (SCREEN_HEIGHT / 2) - 16) {
             scenario->colision.y += speed;
+
+            if(*timer >= 0.5) {
+                player->texture = w_texture[counters[0]];
+                counters[0]++;
+                *timer = 0;
+            }
+            if (counters[0] >= 3) {
+                counters[0] = 0;
+            }
     } else if (keys[SDL_SCANCODE_W] && player->colision.y > 0) {
         player->colision.y -= speed;
+
+        if(*timer >= 0.5) {
+                player->texture = w_texture[counters[0]];
+                counters[0]++;
+                *timer = 0;
+            }
+            if (counters[0] >= 3) {
+                counters[0] = 0;
+            }
     }
 
     if (keys[SDL_SCANCODE_S] && scenario->colision.y > -SCREEN_HEIGHT && player->colision.y > (SCREEN_HEIGHT / 2) - 16) {
         scenario->colision.y -= speed;
+
+        if(*timer >= 0.5) {
+                player->texture = s_texture[counters[1]];
+                counters[1] += 1;
+                *timer = 0;
+            }
+            if (counters[1] >= 3) {
+                counters[1] = 0;
+            }
     } else if (keys[SDL_SCANCODE_S] && player->colision.y < SCREEN_HEIGHT - player->colision.h) {
         player->colision.y += speed;
+
+        if(*timer >= 0.5) {
+                player->texture = s_texture[counters[1]];
+                counters[1]++;
+                *timer = 0;
+            }
+            if (counters[1] >= 3) {
+                counters[1] = 0;
+            }
     }
 
     if (keys[SDL_SCANCODE_A] && scenario->colision.x < 0 && player->colision.x < (SCREEN_WIDTH / 2) - 10) {
         scenario->colision.x += speed;
+
+        if(*timer >= 0.5) {
+                player->texture = a_texture[counters[2]];
+                counters[2]++;
+                *timer = 0;
+            }
+            if (counters[2] >= 2) {
+                counters[2] = 0;
+            }
     } else if (keys[SDL_SCANCODE_A] && player->colision.x > 0) {
         player->colision.x -= speed;
+
+        if(*timer >= 0.5) {
+                player->texture = a_texture[counters[2]];
+                counters[2]++;
+                *timer = 0;
+            }
+            if (counters[2] >= 2) {
+                counters[2] = 0;
+            }
     }
 
     if (keys[SDL_SCANCODE_D] && scenario->colision.x > -SCREEN_WIDTH && player->colision.x > (SCREEN_WIDTH / 2) - 10) {
         scenario->colision.x -= speed;
+
+        if(*timer >= 0.5) {
+                player->texture = d_texture[counters[3]];
+                counters[3]++;
+                *timer = 0;
+            }
+            if (counters[3] >= 2) {
+                counters[3] = 0;
+            }
     } else if (keys[SDL_SCANCODE_D] && player->colision.x < SCREEN_WIDTH - player->colision.w) {
         player->colision.x += speed;
+
+        if(*timer >= 0.5) {
+                player->texture = d_texture[counters[3]];
+                counters[3]++;
+                *timer = 0;
+            }
+            if (counters[3] >= 2) {
+                counters[3] = 0;
+            }
     }
 }
 
