@@ -63,7 +63,11 @@ int main(int argc, char* argv[]) {
     SDL_Texture* left2 = criarTextura(game.renderer, "assets/sprites/characters/meneghetti-left-1.png");
     SDL_Texture* right1 = criarTextura(game.renderer, "assets/sprites/characters/meneghetti-right.png");
     SDL_Texture* right2 = criarTextura(game.renderer, "assets/sprites/characters/meneghetti-right-1.png");
-
+    if(!back1 || !back2 || !back3 || !front1 || !front2 || !front3 || !left1 || !left2 || !right1 || !right2) {
+        printf("%s", SDL_GetError());
+        return 1;
+    }
+    
     // PACOTES DE ANIMAÇÃO:
     SDL_Texture* up_anim[] = {back1, back2, back3};
     SDL_Texture* down_anim[] = {front1, front2, front3};
