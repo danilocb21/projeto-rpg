@@ -118,10 +118,18 @@ int main(int argc, char* argv[]) {
         SDL_Rect upper_right_colision = {scenario.colision.x + 673, scenario.colision.y + 384, 607, 185};
         SDL_Rect lower_right_colision = {scenario.colision.x + 1045, scenario.colision.y + 739, 235, 221};
         SDL_Rect bottom_colision = {scenario.colision.x + 981, scenario.colision.y + 890, 64, 70};
-        SDL_Rect van_colision = {scenario.colision.x + 758, scenario.colision.y + 592, 64, 34};
         SDL_Rect python_colision = {scenario.colision.x + 620, scenario.colision.y + 153, 39, 64};
 
+        SDL_Rect old_meneghetti = meneghetti.colision;
+        SDL_Rect old_scenario = scenario.colision;
         sprite_update(&scenario, &meneghetti, up_anim, down_anim, left_anim, right_anim, &cont, counters);
+
+        SDL_Rect van_colision = {scenario.colision.x + 758, scenario.colision.y + 592, 64, 34};
+
+        if (colision_check(&meneghetti, &van_colision)) {
+            meneghetti.colision = old_meneghetti;
+            scenario.colision = old_scenario;
+        }
 
         SDL_SetRenderDrawColor(game.renderer, 0, 0, 0, 255);
 
@@ -362,12 +370,15 @@ bool colision_check(Character *player, SDL_Rect *box) {
 
     if (leftX_player >= rightX_box)
         return false;
+
     if (topY_player >= bottomY_box)
         return false;
+
     if (rightX_player <= leftX_box)
         return false;
+
     if (bottomY_player <= topY_box)
         return false;
-    
+
     return true;
 }
