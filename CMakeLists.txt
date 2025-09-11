@@ -34,6 +34,7 @@ target_link_libraries(c_tale
     ${SDL2_IMAGE_LIBRARIES}
     ${SDL2_TTF_LIBRARIES}
     ${SDL2_MIXER_LIBRARIES}
+    m
 )
 
 if (CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
