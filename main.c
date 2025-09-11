@@ -110,7 +110,16 @@ int main(int argc, char* argv[]) {
         }
 
         // COLISÕES:
-        SDL_Rect lower_left_col = {scenario.colision.x, (scenario.colision.y + scenario.colision.h) - 220, 982, 220};
+        SDL_Rect lower_left_colision = {scenario.colision.x, scenario.colision.y + 739, 981, 221};
+        SDL_Rect upper_left_colision = {scenario.colision.x, scenario.colision.y + 384, 607, 185};
+        SDL_Rect top_left_colision = {scenario.colision.x, scenario.colision.y, 253, 384};
+        SDL_Rect top_colision = {scenario.colision.x + 253, scenario.colision.y, 774, 106};
+        SDL_Rect top_right_colision = {scenario.colision.x + 1027, scenario.colision.y, 253, 384};
+        SDL_Rect upper_right_colision = {scenario.colision.x + 673, scenario.colision.y + 384, 607, 185};
+        SDL_Rect lower_right_colision = {scenario.colision.x + 1045, scenario.colision.y + 739, 235, 221};
+        SDL_Rect bottom_colision = {scenario.colision.x + 981, scenario.colision.y + 890, 64, 70};
+        SDL_Rect van_colision = {scenario.colision.x + 758, scenario.colision.y + 592, 64, 34};
+        SDL_Rect python_colision = {scenario.colision.x + 620, scenario.colision.y + 153, 39, 64};
 
         sprite_update(&scenario, &meneghetti, up_anim, down_anim, left_anim, right_anim, &cont, counters);
 
@@ -122,7 +131,16 @@ int main(int argc, char* argv[]) {
         SDL_RenderCopy(game.renderer, meneghetti.texture, NULL, &meneghetti.colision);
 
         SDL_SetRenderDrawColor(game.renderer, 255, 255, 255, 0);
-        SDL_RenderDrawRect(game.renderer, &lower_left_col);
+        SDL_RenderDrawRect(game.renderer, &lower_left_colision);
+        SDL_RenderDrawRect(game.renderer, &upper_left_colision);
+        SDL_RenderDrawRect(game.renderer, &top_left_colision);
+        SDL_RenderDrawRect(game.renderer, &top_colision);
+        SDL_RenderDrawRect(game.renderer, &top_right_colision);
+        SDL_RenderDrawRect(game.renderer, &upper_right_colision);
+        SDL_RenderDrawRect(game.renderer, &lower_right_colision);
+        SDL_RenderDrawRect(game.renderer, &bottom_colision);
+        SDL_RenderDrawRect(game.renderer, &van_colision);
+        SDL_RenderDrawRect(game.renderer, &python_colision);
 
         SDL_RenderPresent(game.renderer);
 
