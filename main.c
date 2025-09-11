@@ -26,6 +26,7 @@ typedef struct {
     SDL_Rect colision;
     float sprite_vel; // Alterado para float para moldar a fluidez do movimento com base nos FPS.
     const Uint8 *keystate;
+    SDL_Rect interact_colision;
 } Character;
 typedef struct {
     SDL_Texture **frames; // Array de texturas.
@@ -33,6 +34,8 @@ typedef struct {
 } Animation;
 
 enum direction { UP = 0, DOWN = 1, LEFT = 2, RIGHT = 3, DIR_COUNT = 4 };
+enum game_states { TITLE_SCREEN, CUTSCENE, OPEN_WORLD, BATTLE_SCREEN };
+enum player_states { MOVABLE, DIALOGUE, PAUSE, DEAD };
 
 bool sdl_initialize(Game *game);
 // bool load_media(Game *game);
@@ -48,6 +51,8 @@ int main(int argc, char* argv[]) {
     (void) argv;
 
     int counters[] = {0, 0, 0, 0};
+    int game_state = OPEN_WORLD;
+    int player_state = MOVABLE;
 
     Game game = {
         .renderer = NULL,
@@ -93,8 +98,9 @@ int main(int argc, char* argv[]) {
     Character meneghetti = {
         .texture = anim_pack[DOWN].frames[0],
         .colision = {(SCREEN_WIDTH / 2) - 10, (SCREEN_HEIGHT / 2) - 16, 19, 32},
-        .sprite_vel = 6.0f, // Deve ser par.
+        .sprite_vel = 120.0f, // Deve ser par.
         .keystate = SDL_GetKeyboardState(NULL),
+        .interact_colision = {(SCREEN_WIDTH / 2) - 10, (SCREEN_HEIGHT / 2) + 16, 19, 19},
     };
     Character scenario = {
         .texture = criarTextura(game.renderer, "assets/sprites/scenario/scenario.png"),
@@ -105,9 +111,20 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    // SONS:
+    Mix_Chunk* lapada = Mix_LoadWAV("assets/sounds/sound_effects/in-game/car_door.wav");
+    if (!lapada) {
+        fprintf(stderr, "Error loading sound: %s\n", Mix_GetError());
+        return 1;
+    }
+    Mix_VolumeChunk(lapada, MIX_MAX_VOLUME);
+
     Uint32 last_ticks = SDL_GetTicks();
     double anim_timer = 0.0;
     const double anim_interval = 0.12;
+
+    bool interaction_request = false;
+
     while (running) {
         while (SDL_PollEvent(&event)) {
             switch (event.type) {
@@ -120,6 +137,9 @@ int main(int argc, char* argv[]) {
                 {
                 case SDL_SCANCODE_ESCAPE:
                     running = SDL_FALSE;
+                    break;
+                case SDL_SCANCODE_E:
+                    interaction_request = true;
                     break;
                 default:
                     break;
@@ -135,30 +155,40 @@ int main(int argc, char* argv[]) {
         if (dt > 0.25) dt = 0.25;
         last_ticks = now;
 
-        // COLISÕES:
-        SDL_Rect boxes[COLLISION_QUANTITY];
-        boxes[0] = (SDL_Rect){scenario.colision.x, scenario.colision.y + 739, 981, 221}; // Bloco inferior esquerdo.
-        boxes[1] = (SDL_Rect){scenario.colision.x, scenario.colision.y + 384, 607, 153}; // Bloco superior esquerdo (ponte).
-        boxes[2] = (SDL_Rect){scenario.colision.x, scenario.colision.y, 253, 384}; // Bloco ao topo esquerdo.
-        boxes[3] = (SDL_Rect){scenario.colision.x + 253, scenario.colision.y, 774, 74}; // Bloco ao topo central.
-        boxes[4] = (SDL_Rect){scenario.colision.x + 1027, scenario.colision.y, 253, 384}; // Bloco ao topo direito.
-        boxes[5] = (SDL_Rect){scenario.colision.x + 673, scenario.colision.y + 384, 607, 158}; // Bloco superior direito (ponte).
-        boxes[6] = (SDL_Rect){scenario.colision.x + 1045, scenario.colision.y + 739, 235, 221}; // Bloco inferior esquerdo.
-        boxes[7] = (SDL_Rect){scenario.colision.x + 981, scenario.colision.y + 890, 64, 70}; // Bloco do rodapé (lago).
-        boxes[8] = (SDL_Rect){scenario.colision.x + 620, scenario.colision.y + 153, 39, 35}; // Bloco do Mr. Python.
-        boxes[9] = (SDL_Rect){scenario.colision.x + 758, scenario.colision.y + 592, 64, 4}; // Bloco da Python Van.
+        if (game_state == OPEN_WORLD) {
+            // COLISÕES:
+            SDL_Rect boxes[COLLISION_QUANTITY];
+            boxes[0] = (SDL_Rect){scenario.colision.x, scenario.colision.y + 739, 981, 221}; // Bloco inferior esquerdo.
+            boxes[1] = (SDL_Rect){scenario.colision.x, scenario.colision.y + 384, 607, 153}; // Bloco superior esquerdo (ponte).
+            boxes[2] = (SDL_Rect){scenario.colision.x, scenario.colision.y, 253, 384}; // Bloco ao topo esquerdo.
+            boxes[3] = (SDL_Rect){scenario.colision.x + 253, scenario.colision.y, 774, 74}; // Bloco ao topo central.
+            boxes[4] = (SDL_Rect){scenario.colision.x + 1027, scenario.colision.y, 253, 384}; // Bloco ao topo direito.
+            boxes[5] = (SDL_Rect){scenario.colision.x + 673, scenario.colision.y + 384, 607, 158}; // Bloco superior direito (ponte).
+            boxes[6] = (SDL_Rect){scenario.colision.x + 1045, scenario.colision.y + 739, 235, 221}; // Bloco inferior esquerdo.
+            boxes[7] = (SDL_Rect){scenario.colision.x + 981, scenario.colision.y + 890, 64, 70}; // Bloco do rodapé (lago).
+            boxes[8] = (SDL_Rect){scenario.colision.x + 620, scenario.colision.y + 153, 39, 40}; // Bloco do Mr. Python.
+            boxes[9] = (SDL_Rect){scenario.colision.x + 758, scenario.colision.y + 592, 64, 4}; // Bloco da Python Van.
 
-        sprite_update(&scenario, &meneghetti, anim_pack, dt, boxes, COLLISION_QUANTITY, &anim_timer, anim_interval, counters);
+            if (player_state == MOVABLE) {
+                sprite_update(&scenario, &meneghetti, anim_pack, dt, boxes, COLLISION_QUANTITY, &anim_timer, anim_interval, counters);
+            }
+            if (interaction_request) {
+                if (rects_intersect(&meneghetti.interact_colision, &boxes[9])) {
+                    printf("Tomi!!");
+                    Mix_PlayChannel(1, lapada, 1);
+                }
 
-        SDL_SetRenderDrawColor(game.renderer, 0, 0, 0, 255);
-        SDL_RenderClear(game.renderer);
+                interaction_request = false;
+            }
 
-        SDL_RenderCopy(game.renderer, scenario.texture, NULL, &scenario.colision);
-        SDL_RenderCopy(game.renderer, meneghetti.texture, NULL, &meneghetti.colision);
+            SDL_SetRenderDrawColor(game.renderer, 0, 0, 0, 255);
+            SDL_RenderClear(game.renderer);
 
-        SDL_SetRenderDrawColor(game.renderer, 255, 255, 255, 0);
-        for(int i = 0; i < COLLISION_QUANTITY; i++) {
-            SDL_RenderDrawRect(game.renderer, &boxes[i]);
+            SDL_RenderCopy(game.renderer, scenario.texture, NULL, &scenario.colision);
+            SDL_RenderCopy(game.renderer, meneghetti.texture, NULL, &meneghetti.colision);
+
+            SDL_SetRenderDrawColor(game.renderer, 255, 255, 255, 255);
+            SDL_RenderDrawRect(game.renderer, &meneghetti.interact_colision);
         }
 
         SDL_RenderPresent(game.renderer);
@@ -198,6 +228,7 @@ bool sdl_initialize(Game *game) {
         fprintf(stderr, "Error Opening Audio: %s\n", Mix_GetError());
         return true;
     }
+    Mix_AllocateChannels(16);
 
     if (TTF_Init()) {
         fprintf(stderr, "Error initializing SDL_ttf: %s\n", TTF_GetError());
@@ -285,6 +316,8 @@ void sprite_update(Character *scenario, Character *player, Animation *animation,
                 scenario->colision.y += move;
                 moving_up = true;
             }
+            player->interact_colision.x = player->colision.x;
+            player->interact_colision.y = player->colision.y - 2;
         } else {
             SDL_Rect test = player->colision;
             test.y -= move;
@@ -292,6 +325,8 @@ void sprite_update(Character *scenario, Character *player, Animation *animation,
                 player->colision.y -= move;
                 moving_up = true;
             }
+            player->interact_colision.x = player->colision.x;
+            player->interact_colision.y = player->colision.y - 2;
         }
     }
 
@@ -303,6 +338,8 @@ void sprite_update(Character *scenario, Character *player, Animation *animation,
                 scenario->colision.y -= move;
                 moving_down = true;
             }
+            player->interact_colision.x = player->colision.x;
+            player->interact_colision.y = player->colision.y + player->colision.h;
         } else {
             SDL_Rect test = player->colision;
             test.y += move;
@@ -310,6 +347,8 @@ void sprite_update(Character *scenario, Character *player, Animation *animation,
                 player->colision.y += move;
                 moving_down = true;
             }
+            player->interact_colision.x = player->colision.x;
+            player->interact_colision.y = player->colision.y + player->colision.h;
         }
     }
 
@@ -321,6 +360,8 @@ void sprite_update(Character *scenario, Character *player, Animation *animation,
                 scenario->colision.x += move;
                 moving_left = true;
             }
+            player->interact_colision.x = player->colision.x - player->interact_colision.w;
+            player->interact_colision.y = (player->colision.y + player->colision.h) - player->interact_colision.h;
         } else {
             SDL_Rect test = player->colision;
             test.x -= move;
@@ -328,6 +369,8 @@ void sprite_update(Character *scenario, Character *player, Animation *animation,
                 player->colision.x -= move;
                 moving_left = true;
             }
+            player->interact_colision.x = player->colision.x - player->interact_colision.w;
+            player->interact_colision.y = (player->colision.y + player->colision.h) - player->interact_colision.h;
         }
     }
 
@@ -339,6 +382,8 @@ void sprite_update(Character *scenario, Character *player, Animation *animation,
                 scenario->colision.x -= move;
                 moving_right = true;
             }
+            player->interact_colision.x = player->colision.x + player->colision.w;
+            player->interact_colision.y = (player->colision.y + player->colision.h) - player->interact_colision.h;
         } else {
             SDL_Rect test = player->colision;
             test.x += move;
@@ -346,6 +391,8 @@ void sprite_update(Character *scenario, Character *player, Animation *animation,
                 player->colision.x += move;
                 moving_right = true;
             }
+            player->interact_colision.x = player->colision.x + player->colision.w;
+            player->interact_colision.y = (player->colision.y + player->colision.h) - player->interact_colision.h;
         }
     }
 
