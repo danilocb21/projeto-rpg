@@ -14,6 +14,7 @@
 #define IMAGE_FLAGS (IMG_INIT_PNG)
 #define MIXER_FLAGS (MIX_INIT_MP3 | MIX_INIT_OGG)
 #define COLLISION_QUANTITY 10
+#define MAX_DIALOGUE_CHAR 512
 
 #define GAME_TITLE "C-Tale: Meneghetti Vs Python"
 
@@ -35,8 +36,11 @@ typedef struct {
 typedef struct {
     TTF_Font *text_font;
     SDL_Color text_color;
-    SDL_Texture *text_content;
+    SDL_Texture *chars[MAX_DIALOGUE_CHAR];
+    int char_count;
     SDL_Rect text_box;
+    int cur_str, cur_char;
+    double timer;
 } Text;
 
 enum direction { UP, DOWN, LEFT, RIGHT, DIR_COUNT };
@@ -48,7 +52,9 @@ bool sdl_initialize(Game *game);
 void object_cleanup(SDL_Texture *obj);
 void game_cleanup(Game *game, int exit_status);
 SDL_Texture *create_texture(SDL_Renderer *render, const char *dir);
-SDL_Texture *create_txt(SDL_Renderer *render, const char *text, TTF_Font *font, SDL_Color color);
+SDL_Texture *create_txt(SDL_Renderer *render, char text, TTF_Font *font, SDL_Color color);
+void create_dialogue(SDL_Renderer *render, Text *text, int *player_state, double dt);
+void reset_dialogue(Text *text);
 void sprite_update(Character *scenario, Character *player, Animation *animation, double dt, SDL_Rect boxes[], int box_count, double *anim_timer, double anim_interval, int counters[]);
 bool rects_intersect(SDL_Rect *a, SDL_Rect *b);
 bool check_collision(SDL_Rect *player, SDL_Rect boxes[], int box_count);
@@ -105,13 +111,13 @@ int main(int argc, char* argv[]) {
     Character meneghetti = {
         .texture = anim_pack[DOWN].frames[0],
         .colision = {(SCREEN_WIDTH / 2) - 10, (SCREEN_HEIGHT / 2) - 16, 19, 32},
-        .sprite_vel = 120.0f, // Deve ser par.
+        .sprite_vel = 500.0f, // Deve ser par.
         .keystate = SDL_GetKeyboardState(NULL),
-        .interact_colision = {(SCREEN_WIDTH / 2) - 10, (SCREEN_HEIGHT / 2) + 16, 19, 19},
+        .interact_colision = {(SCREEN_WIDTH / 2) - 10, (SCREEN_HEIGHT / 2) + 16, 19, 19}
     };
     Character scenario = {
         .texture = create_texture(game.renderer, "assets/sprites/scenario/scenario.png"),
-        .colision = {0, -SCREEN_HEIGHT, SCREEN_WIDTH * 2, SCREEN_HEIGHT * 2},
+        .colision = {0, -SCREEN_HEIGHT, SCREEN_WIDTH * 2, SCREEN_HEIGHT * 2}
     };
     if (!scenario.texture) {
         fprintf(stderr, "Error loading scenario: %s\n", SDL_GetError());
@@ -124,14 +130,21 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "Error loading sound: %s\n", Mix_GetError());
         return 1;
     }
-    Mix_VolumeChunk(lapada, MIX_MAX_VOLUME);
 
     // BASES DE TEXTO:
     Text dialogue = {
         .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", 32),
         .text_color = {255, 255, 255, 255},
+        .char_count = 0,
+        .text_box = {0, 0, 0, 0},
+        .cur_str = 0,
+        .cur_char = 0,
+        .timer = 0.0
     };
-    (void) dialogue;
+    if (!dialogue.text_font) {
+        fprintf(stderr, "Error loading font: %s", TTF_GetError());
+        return 1;
+    }
 
     Uint32 last_ticks = SDL_GetTicks();
     double anim_timer = 0.0;
@@ -153,7 +166,8 @@ int main(int argc, char* argv[]) {
                     running = SDL_FALSE;
                     break;
                 case SDL_SCANCODE_E:
-                    interaction_request = true;
+                    if (player_state == MOVABLE)
+                        interaction_request = true;
                     break;
                 default:
                     break;
@@ -188,8 +202,7 @@ int main(int argc, char* argv[]) {
             }
             if (interaction_request) {
                 if (rects_intersect(&meneghetti.interact_colision, &boxes[8])) {
-                    printf("Tomi!!");
-                    Mix_PlayChannel(-1, lapada, 1);
+                    player_state = DIALOGUE;
                 }
 
                 interaction_request = false;
@@ -200,6 +213,10 @@ int main(int argc, char* argv[]) {
 
             SDL_RenderCopy(game.renderer, scenario.texture, NULL, &scenario.colision);
             SDL_RenderCopy(game.renderer, meneghetti.texture, NULL, &meneghetti.colision);
+
+            if (player_state == DIALOGUE) {
+                create_dialogue(game.renderer, &dialogue, &player_state, dt);
+            }
 
             SDL_SetRenderDrawColor(game.renderer, 255, 255, 255, 255);
             SDL_RenderDrawRect(game.renderer, &meneghetti.interact_colision);
@@ -311,8 +328,10 @@ SDL_Texture *create_texture(SDL_Renderer *render, const char *dir) {
     return texture;
 }
 
-SDL_Texture *create_txt(SDL_Renderer *render, const char *text, TTF_Font *font, SDL_Color color) {
-    SDL_Surface* surface = TTF_RenderText_Solid(font, text, color);
+SDL_Texture *create_txt(SDL_Renderer *render, char text, TTF_Font *font, SDL_Color color) {
+    const char array[2] = {text, '\0'};
+
+    SDL_Surface* surface = TTF_RenderText_Solid(font, array, color);
     if (!surface) {
         fprintf(stderr, "Error loading text surface: %s", TTF_GetError());
         return NULL;
@@ -326,6 +345,85 @@ SDL_Texture *create_txt(SDL_Renderer *render, const char *text, TTF_Font *font, 
     }
     SDL_FreeSurface(surface);
     return texture;
+}
+
+void create_dialogue(SDL_Renderer *render, Text *text, int *player_state, double dt) {
+    const char *writings[] = {"Eae Meneghetti seu comedia kkkkk", "Ta e podi"};
+    int text_amount = sizeof(writings) / sizeof(writings[0]);
+    const double timer_delay = 0.08;
+    
+    SDL_Rect dialogue_box = {50, 25, SCREEN_WIDTH - 100, 100};
+    SDL_SetRenderDrawBlendMode(render, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(render, 0, 0, 0, 200);
+    SDL_RenderFillRect(render, &dialogue_box);
+
+    text->text_box.x = dialogue_box.x + 25;
+    text->text_box.y = dialogue_box.y + 25;
+
+    text->timer += dt;
+    if (text->timer >= timer_delay) {
+            text->timer = 0.0;
+
+            const char *current = writings[text->cur_str];
+
+            if (current[text->cur_char] == '\0') {
+                text->cur_str++;
+                text->cur_char = 0;
+
+                for (int i = 0; i < text->char_count; i++) {
+                    if (text->chars[i]) {
+                        SDL_DestroyTexture(text->chars[i]);
+                        text->chars[i] = NULL;
+                    }
+                }
+                text->char_count = 0;
+
+                if (text->cur_str >= text_amount) {
+                    reset_dialogue(text);
+                    *player_state = MOVABLE;
+                    return;
+                }
+
+                current = writings[text->cur_str];
+            }
+
+            if (text->char_count < MAX_DIALOGUE_CHAR) {
+                char render_char = current[text->cur_char];
+                text->chars[text->char_count] = create_txt(render, render_char, text->text_font, text->text_color);
+                if (text->chars[text->char_count]) {
+                    text->char_count++;
+                }
+            }
+            text->cur_char++;
+    }
+
+    int pos_x = text->text_box.x;
+    for (int i = 0; i < text->char_count; i++) {
+        SDL_Texture *ct = text->chars[i];
+        if (!ct)
+            continue;
+        
+        int w, h;
+        SDL_QueryTexture(ct, NULL, NULL, &w, &h);
+        SDL_Rect dst = {pos_x, text->text_box.y, w, h};
+        SDL_RenderCopy(render, ct, NULL, &dst);
+        
+        pos_x += w;
+    }
+
+}
+
+void reset_dialogue(Text *text) {
+    for (int i = 0; i < text->char_count; i++) {
+        if (text->chars[i]) {
+            SDL_DestroyTexture(text->chars[i]);
+            text->chars[i] = NULL;
+        }
+    }
+    text->char_count = 0;
+    text->cur_str = 0;
+    text->cur_char = 0;
+    text->timer = 0.0;
 }
 
 void sprite_update(Character *scenario, Character *player, Animation *animation, double dt, SDL_Rect boxes[], int box_count, double *anim_timer, double anim_interval, int counters[]) {
