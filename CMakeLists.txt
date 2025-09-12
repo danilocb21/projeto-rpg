@@ -11,23 +11,12 @@ pkg_check_modules(SDL2_IMAGE REQUIRED SDL2_image)
 pkg_check_modules(SDL2_TTF REQUIRED SDL2_ttf)
 pkg_check_modules(SDL2_MIXER REQUIRED SDL2_mixer)
 
-add_executable(c_tale
-    main.c
-)
+file(GLOB SOURCES "src/*.c")
+add_executable(c_tale ${SOURCES})
 
-target_include_directories(c_tale PRIVATE
-    ${SDL2_INCLUDE_DIRS}
-    ${SDL2_IMAGE_INCLUDE_DIRS}
-    ${SDL2_TTF_INCLUDE_DIRS}
-    ${SDL2_MIXER_INCLUDE_DIRS}
-)
-
-target_link_directories(c_tale PRIVATE
-    ${SDL2_LIBRARY_DIRS}
-    ${SDL2_IMAGE_LIBRARY_DIRS}
-    ${SDL2_TTF_LIBRARY_DIRS}
-    ${SDL2_MIXER_LIBRARY_DIRS}
-)
+# add_executable(c_tale
+#     main.c
+# )
 
 target_link_libraries(c_tale
     ${SDL2_LIBRARIES}
