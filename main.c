@@ -131,6 +131,7 @@ int main(int argc, char* argv[]) {
         .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", 32),
         .text_color = {255, 255, 255, 255},
     };
+    (void) dialogue;
 
     Uint32 last_ticks = SDL_GetTicks();
     double anim_timer = 0.0;
