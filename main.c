@@ -14,6 +14,7 @@
 #define IMAGE_FLAGS (IMG_INIT_PNG)
 #define MIXER_FLAGS (MIX_INIT_MP3 | MIX_INIT_OGG)
 #define COLLISION_QUANTITY 10
+#define DIALOGUE_FONT_SIZE 25
 #define MAX_DIALOGUE_CHAR 512
 
 #define GAME_TITLE "C-Tale: Meneghetti Vs Python"
@@ -41,6 +42,7 @@ typedef struct {
     SDL_Rect text_box;
     int cur_str, cur_char;
     double timer;
+    bool waiting_for_input;
 } Text;
 
 enum direction { UP, DOWN, LEFT, RIGHT, DIR_COUNT };
@@ -53,7 +55,7 @@ void object_cleanup(SDL_Texture *obj);
 void game_cleanup(Game *game, int exit_status);
 SDL_Texture *create_texture(SDL_Renderer *render, const char *dir);
 SDL_Texture *create_txt(SDL_Renderer *render, char text, TTF_Font *font, SDL_Color color);
-void create_dialogue(SDL_Renderer *render, Text *text, int *player_state, double dt);
+void create_dialogue(const Uint8 *keystate, SDL_Renderer *render, Text *text, int *player_state, double dt, Animation *meneghetti_face, Animation *python_face);
 void reset_dialogue(Text *text);
 void sprite_update(Character *scenario, Character *player, Animation *animation, double dt, SDL_Rect boxes[], int box_count, double *anim_timer, double anim_interval, int counters[]);
 bool rects_intersect(SDL_Rect *a, SDL_Rect *b);
@@ -78,7 +80,7 @@ int main(int argc, char* argv[]) {
     SDL_bool running = SDL_TRUE;
     SDL_Event event;
 
-    // PACOTE DE ANIMAÇÃO:
+    // PACOTES DE ANIMAÇÃO:
     Animation anim_pack[DIR_COUNT];
     anim_pack[UP].count = 3;
     anim_pack[UP].frames = malloc(sizeof(SDL_Texture*) * anim_pack[UP].count);
@@ -107,6 +109,33 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    Animation meneghetti_dialogue[2];
+    meneghetti_dialogue[0].count = 2;
+    meneghetti_dialogue[0].frames = malloc(sizeof(SDL_Texture*) * meneghetti_dialogue[0].count);
+    meneghetti_dialogue[0].frames[0] = create_texture(game.renderer, "assets/sprites/characters/meneghetti-dialogue-1.png");
+    meneghetti_dialogue[0].frames[1] = create_texture(game.renderer, "assets/sprites/characters/meneghetti-dialogue-2.png");
+    meneghetti_dialogue[1].count = 2;
+    meneghetti_dialogue[1].frames = malloc(sizeof(SDL_Texture*) * meneghetti_dialogue[1].count);
+    meneghetti_dialogue[1].frames[0] = create_texture(game.renderer, "assets/sprites/characters/meneghetti-dialogue-angry-1.png");
+    meneghetti_dialogue[1].frames[1] = create_texture(game.renderer, "assets/sprites/characters/meneghetti-dialogue-angry-2.png");
+    for (int i = 0; i < 2; i++) {
+        for (int n = 0; n < meneghetti_dialogue[i].count; n++) {
+            if (!meneghetti_dialogue[i].frames[n]) {
+                fprintf(stderr, "Error loading animation sprite: %s", IMG_GetError());
+                return 1;
+            }
+        }
+    }
+
+    Animation python_dialogue = {
+        .frames = (SDL_Texture*[]){create_texture(game.renderer, "assets/sprites/characters/python-dialogue-1.png"), create_texture(game.renderer, "assets/sprites/characters/python-dialogue-2.png")},
+        .count = 2
+    };
+    if (!python_dialogue.frames[0] || !python_dialogue.frames[1]) {
+        fprintf(stderr, "Error loading animation sprite: %s", IMG_GetError());
+        return 1;
+    }
+
     // OBJETOS:
     Character meneghetti = {
         .texture = anim_pack[DOWN].frames[0],
@@ -133,13 +162,14 @@ int main(int argc, char* argv[]) {
 
     // BASES DE TEXTO:
     Text dialogue = {
-        .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", 32),
+        .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", DIALOGUE_FONT_SIZE),
         .text_color = {255, 255, 255, 255},
         .char_count = 0,
         .text_box = {0, 0, 0, 0},
         .cur_str = 0,
         .cur_char = 0,
-        .timer = 0.0
+        .timer = 0.0,
+        .waiting_for_input = false
     };
     if (!dialogue.text_font) {
         fprintf(stderr, "Error loading font: %s", TTF_GetError());
@@ -215,7 +245,7 @@ int main(int argc, char* argv[]) {
             SDL_RenderCopy(game.renderer, meneghetti.texture, NULL, &meneghetti.colision);
 
             if (player_state == DIALOGUE) {
-                create_dialogue(game.renderer, &dialogue, &player_state, dt);
+                create_dialogue(meneghetti.keystate, game.renderer, &dialogue, &player_state, dt, meneghetti_dialogue, &python_dialogue);
             }
 
             SDL_SetRenderDrawColor(game.renderer, 255, 255, 255, 255);
@@ -347,54 +377,80 @@ SDL_Texture *create_txt(SDL_Renderer *render, char text, TTF_Font *font, SDL_Col
     return texture;
 }
 
-void create_dialogue(SDL_Renderer *render, Text *text, int *player_state, double dt) {
-    const char *writings[] = {"Eae Meneghetti seu comedia kkkkk", "Ta e podi"};
-    int text_amount = sizeof(writings) / sizeof(writings[0]);
-    const double timer_delay = 0.08;
+void create_dialogue(const Uint8 *keystate, SDL_Renderer *render, Text *text, int *player_state, double dt, Animation *meneghetti_face, Animation *python_face) {
+    const Uint8 *keys = keystate ? keystate : SDL_GetKeyboardState(NULL);
+
+    static double e_cooldown = 0.0;
+    e_cooldown += dt;
+    bool e_pressed = keys[SDL_SCANCODE_E];
     
-    SDL_Rect dialogue_box = {50, 25, SCREEN_WIDTH - 100, 100};
+    const char *writings[] = {"* Ola calvo, eu irei lhe mostrar a python", "* Bora bill, amostradinho", "* Teste, nao sei mais"};
+    int text_amount = sizeof(writings) / sizeof(writings[0]);
+    const double timer_delay = 0.04;
+    
+    SDL_Rect dialogue_box = {25, 25, SCREEN_WIDTH - 50, 150};
     SDL_SetRenderDrawBlendMode(render, SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(render, 0, 0, 0, 200);
+    SDL_SetRenderDrawColor(render, 0, 0, 0, 255);
     SDL_RenderFillRect(render, &dialogue_box);
 
     text->text_box.x = dialogue_box.x + 25;
     text->text_box.y = dialogue_box.y + 25;
 
-    text->timer += dt;
-    if (text->timer >= timer_delay) {
-            text->timer = 0.0;
-
+    if (!text->waiting_for_input) {
+        text->timer += dt;
+        if (e_pressed && e_cooldown >= 0.2) {
             const char *current = writings[text->cur_str];
-
-            if (current[text->cur_char] == '\0') {
-                text->cur_str++;
-                text->cur_char = 0;
-
-                for (int i = 0; i < text->char_count; i++) {
-                    if (text->chars[i]) {
-                        SDL_DestroyTexture(text->chars[i]);
-                        text->chars[i] = NULL;
-                    }
-                }
-                text->char_count = 0;
-
-                if (text->cur_str >= text_amount) {
-                    reset_dialogue(text);
-                    *player_state = MOVABLE;
-                    return;
-                }
-
-                current = writings[text->cur_str];
-            }
-
-            if (text->char_count < MAX_DIALOGUE_CHAR) {
+            while (current[text->cur_char] != '\0' && text->char_count < MAX_DIALOGUE_CHAR) {
                 char render_char = current[text->cur_char];
                 text->chars[text->char_count] = create_txt(render, render_char, text->text_font, text->text_color);
                 if (text->chars[text->char_count]) {
                     text->char_count++;
                 }
+                text->cur_char++;
             }
-            text->cur_char++;
+            text->waiting_for_input = true;
+            e_cooldown = 0.0;
+        }
+        else if (text->timer >= timer_delay) {
+            text->timer = 0.0;
+            const char *current = writings[text->cur_str];
+            
+            if (current[text->cur_char] == '\0') {
+                current = writings[text->cur_str];
+                text->waiting_for_input = true;
+            }
+            else {
+                if (text->char_count < MAX_DIALOGUE_CHAR) {
+                    char render_char = current[text->cur_char];
+                    text->chars[text->char_count] = create_txt(render, render_char, text->text_font, text->text_color);
+                    if (text->chars[text->char_count]) {
+                        text->char_count++;
+                    }
+                }
+                text->cur_char++;
+            }
+        }
+    }
+    else {
+        if (e_pressed && e_cooldown >= 0.2) {
+            for (int i = 0; i < text->char_count; i++) {
+                if (text->chars[i]) {
+                    SDL_DestroyTexture(text->chars[i]);
+                    text->chars[i] = NULL;
+                }
+            }
+            text->char_count = 0;
+            text->cur_char = 0;
+            text->cur_str++;
+
+            text->waiting_for_input = false;
+            if (text->cur_str >= text_amount) {
+                reset_dialogue(text);
+                *player_state = MOVABLE;
+                return;
+            }
+            e_cooldown = 0.0;
+        }
     }
 
     int pos_x = text->text_box.x;
