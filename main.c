@@ -32,8 +32,14 @@ typedef struct {
     SDL_Texture **frames; // Array de texturas.
     int count; // Quantidade de frames do array.
 } Animation;
+typedef struct {
+    TTF_Font *text_font;
+    SDL_Color text_color;
+    SDL_Texture *text_content;
+    SDL_Rect text_box;
+} Text;
 
-enum direction { UP = 0, DOWN = 1, LEFT = 2, RIGHT = 3, DIR_COUNT = 4 };
+enum direction { UP, DOWN, LEFT, RIGHT, DIR_COUNT };
 enum game_states { TITLE_SCREEN, CUTSCENE, OPEN_WORLD, BATTLE_SCREEN };
 enum player_states { MOVABLE, DIALOGUE, PAUSE, DEAD };
 
@@ -41,7 +47,8 @@ bool sdl_initialize(Game *game);
 // bool load_media(Game *game);
 void object_cleanup(SDL_Texture *obj);
 void game_cleanup(Game *game, int exit_status);
-SDL_Texture *criarTextura(SDL_Renderer *render, const char *dir);
+SDL_Texture *create_texture(SDL_Renderer *render, const char *dir);
+SDL_Texture *create_txt(SDL_Renderer *render, const char *text, TTF_Font *font, SDL_Color color);
 void sprite_update(Character *scenario, Character *player, Animation *animation, double dt, SDL_Rect boxes[], int box_count, double *anim_timer, double anim_interval, int counters[]);
 bool rects_intersect(SDL_Rect *a, SDL_Rect *b);
 bool check_collision(SDL_Rect *player, SDL_Rect boxes[], int box_count);
@@ -69,22 +76,22 @@ int main(int argc, char* argv[]) {
     Animation anim_pack[DIR_COUNT];
     anim_pack[UP].count = 3;
     anim_pack[UP].frames = malloc(sizeof(SDL_Texture*) * anim_pack[UP].count);
-    anim_pack[UP].frames[0] = criarTextura(game.renderer, "assets/sprites/characters/meneghetti-back.png");
-    anim_pack[UP].frames[1] = criarTextura(game.renderer, "assets/sprites/characters/meneghetti-back-1.png");
-    anim_pack[UP].frames[2] = criarTextura(game.renderer, "assets/sprites/characters/meneghetti-back-2.png");
+    anim_pack[UP].frames[0] = create_texture(game.renderer, "assets/sprites/characters/meneghetti-back.png");
+    anim_pack[UP].frames[1] = create_texture(game.renderer, "assets/sprites/characters/meneghetti-back-1.png");
+    anim_pack[UP].frames[2] = create_texture(game.renderer, "assets/sprites/characters/meneghetti-back-2.png");
     anim_pack[DOWN].count = 3;
     anim_pack[DOWN].frames = malloc(sizeof(SDL_Texture*) * anim_pack[DOWN].count);
-    anim_pack[DOWN].frames[0] = criarTextura(game.renderer, "assets/sprites/characters/meneghetti-front.png");
-    anim_pack[DOWN].frames[1] = criarTextura(game.renderer, "assets/sprites/characters/meneghetti-front-1.png");
-    anim_pack[DOWN].frames[2] = criarTextura(game.renderer, "assets/sprites/characters/meneghetti-front-2.png");
+    anim_pack[DOWN].frames[0] = create_texture(game.renderer, "assets/sprites/characters/meneghetti-front.png");
+    anim_pack[DOWN].frames[1] = create_texture(game.renderer, "assets/sprites/characters/meneghetti-front-1.png");
+    anim_pack[DOWN].frames[2] = create_texture(game.renderer, "assets/sprites/characters/meneghetti-front-2.png");
     anim_pack[LEFT].count = 2;
     anim_pack[LEFT].frames = malloc(sizeof(SDL_Texture*) * anim_pack[LEFT].count);
-    anim_pack[LEFT].frames[0] = criarTextura(game.renderer, "assets/sprites/characters/meneghetti-left.png");
-    anim_pack[LEFT].frames[1] = criarTextura(game.renderer, "assets/sprites/characters/meneghetti-left-1.png");
+    anim_pack[LEFT].frames[0] = create_texture(game.renderer, "assets/sprites/characters/meneghetti-left.png");
+    anim_pack[LEFT].frames[1] = create_texture(game.renderer, "assets/sprites/characters/meneghetti-left-1.png");
     anim_pack[RIGHT].count = 2;
     anim_pack[RIGHT].frames = malloc(sizeof(SDL_Texture*) * anim_pack[RIGHT].count);
-    anim_pack[RIGHT].frames[0] = criarTextura(game.renderer, "assets/sprites/characters/meneghetti-right.png");
-    anim_pack[RIGHT].frames[1] = criarTextura(game.renderer, "assets/sprites/characters/meneghetti-right-1.png");
+    anim_pack[RIGHT].frames[0] = create_texture(game.renderer, "assets/sprites/characters/meneghetti-right.png");
+    anim_pack[RIGHT].frames[1] = create_texture(game.renderer, "assets/sprites/characters/meneghetti-right-1.png");
     for (int i = 0; i < DIR_COUNT; i++) {
         for (int n = 0; n < anim_pack[i].count; n++) {
             if (!anim_pack[i].frames[n]) {
@@ -103,7 +110,7 @@ int main(int argc, char* argv[]) {
         .interact_colision = {(SCREEN_WIDTH / 2) - 10, (SCREEN_HEIGHT / 2) + 16, 19, 19},
     };
     Character scenario = {
-        .texture = criarTextura(game.renderer, "assets/sprites/scenario/scenario.png"),
+        .texture = create_texture(game.renderer, "assets/sprites/scenario/scenario.png"),
         .colision = {0, -SCREEN_HEIGHT, SCREEN_WIDTH * 2, SCREEN_HEIGHT * 2},
     };
     if (!scenario.texture) {
@@ -118,6 +125,12 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     Mix_VolumeChunk(lapada, MIX_MAX_VOLUME);
+
+    // BASES DE TEXTO:
+    Text dialogue = {
+        .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", 32),
+        .text_color = {255, 255, 255, 255},
+    };
 
     Uint32 last_ticks = SDL_GetTicks();
     double anim_timer = 0.0;
@@ -173,9 +186,9 @@ int main(int argc, char* argv[]) {
                 sprite_update(&scenario, &meneghetti, anim_pack, dt, boxes, COLLISION_QUANTITY, &anim_timer, anim_interval, counters);
             }
             if (interaction_request) {
-                if (rects_intersect(&meneghetti.interact_colision, &boxes[9])) {
+                if (rects_intersect(&meneghetti.interact_colision, &boxes[8])) {
                     printf("Tomi!!");
-                    Mix_PlayChannel(1, lapada, 1);
+                    Mix_PlayChannel(-1, lapada, 1);
                 }
 
                 interaction_request = false;
@@ -280,7 +293,7 @@ void object_cleanup(SDL_Texture *obj) {
     SDL_DestroyTexture(obj);
 }
 
-SDL_Texture *criarTextura(SDL_Renderer *render, const char *dir) {
+SDL_Texture *create_texture(SDL_Renderer *render, const char *dir) {
     SDL_Surface *surface = IMG_Load(dir);
     if (!surface) {
         fprintf(stderr, "Error loading image '%s': '%s'\n", dir, IMG_GetError());
@@ -290,6 +303,23 @@ SDL_Texture *criarTextura(SDL_Renderer *render, const char *dir) {
     SDL_Texture *texture = SDL_CreateTextureFromSurface(render, surface);
     if (!texture) {
         fprintf(stderr, "Error creating texture: '%s'", SDL_GetError());
+        SDL_FreeSurface(surface);
+        return NULL;
+    }
+    SDL_FreeSurface(surface);
+    return texture;
+}
+
+SDL_Texture *create_txt(SDL_Renderer *render, const char *text, TTF_Font *font, SDL_Color color) {
+    SDL_Surface* surface = TTF_RenderText_Solid(font, text, color);
+    if (!surface) {
+        fprintf(stderr, "Error loading text surface: %s", TTF_GetError());
+        return NULL;
+    }
+
+    SDL_Texture* texture = SDL_CreateTextureFromSurface(render, surface);
+    if (!texture) {
+        fprintf(stderr, "Error creating texture: %s", SDL_GetError());
         SDL_FreeSurface(surface);
         return NULL;
     }
