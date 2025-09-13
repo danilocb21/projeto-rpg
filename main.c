@@ -9,7 +9,7 @@
 #define SCREEN_WIDTH 640
 #define SCREEN_HEIGHT 480
 
-#define WINDOW_FLAGS SDL_WINDOW_SHOWN
+#define WINDOW_FLAGS (SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE)
 #define RENDERER_FLAGS (SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC)
 #define IMAGE_FLAGS (IMG_INIT_PNG)
 #define MIXER_FLAGS (MIX_INIT_MP3 | MIX_INIT_OGG)
@@ -48,6 +48,7 @@ typedef struct {
 enum direction { UP, DOWN, LEFT, RIGHT, DIR_COUNT };
 enum game_states { TITLE_SCREEN, CUTSCENE, OPEN_WORLD, BATTLE_SCREEN };
 enum player_states { MOVABLE, DIALOGUE, PAUSE, DEAD };
+enum characters { MENEGHETTI, PYTHON};
 
 bool sdl_initialize(Game *game);
 // bool load_media(Game *game);
@@ -55,7 +56,7 @@ void object_cleanup(SDL_Texture *obj);
 void game_cleanup(Game *game, int exit_status);
 SDL_Texture *create_texture(SDL_Renderer *render, const char *dir);
 SDL_Texture *create_txt(SDL_Renderer *render, char text, TTF_Font *font, SDL_Color color);
-void create_dialogue(const Uint8 *keystate, SDL_Renderer *render, Text *text, int *player_state, double dt, Animation *meneghetti_face, Animation *python_face);
+void create_dialogue(const Uint8 *keystate, SDL_Renderer *render, Text *text, int *player_state, double dt, Animation *meneghetti_face, Animation *python_face, double *anim_timer);
 void reset_dialogue(Text *text);
 void sprite_update(Character *scenario, Character *player, Animation *animation, double dt, SDL_Rect boxes[], int box_count, double *anim_timer, double anim_interval, int counters[]);
 bool rects_intersect(SDL_Rect *a, SDL_Rect *b);
@@ -140,9 +141,9 @@ int main(int argc, char* argv[]) {
     Character meneghetti = {
         .texture = anim_pack[DOWN].frames[0],
         .colision = {(SCREEN_WIDTH / 2) - 10, (SCREEN_HEIGHT / 2) - 16, 19, 32},
-        .sprite_vel = 500.0f, // Deve ser par.
+        .sprite_vel = 100.0f, // Deve ser par.
         .keystate = SDL_GetKeyboardState(NULL),
-        .interact_colision = {(SCREEN_WIDTH / 2) - 10, (SCREEN_HEIGHT / 2) + 16, 19, 19}
+        .interact_colision = {(SCREEN_WIDTH / 2) - 10, (SCREEN_HEIGHT / 2) + 16, 19, 25}
     };
     Character scenario = {
         .texture = create_texture(game.renderer, "assets/sprites/scenario/scenario.png"),
@@ -245,11 +246,13 @@ int main(int argc, char* argv[]) {
             SDL_RenderCopy(game.renderer, meneghetti.texture, NULL, &meneghetti.colision);
 
             if (player_state == DIALOGUE) {
-                create_dialogue(meneghetti.keystate, game.renderer, &dialogue, &player_state, dt, meneghetti_dialogue, &python_dialogue);
+                create_dialogue(meneghetti.keystate, game.renderer, &dialogue, &player_state, dt, meneghetti_dialogue, &python_dialogue, &anim_timer);
             }
 
             SDL_SetRenderDrawColor(game.renderer, 255, 255, 255, 255);
-            SDL_RenderDrawRect(game.renderer, &meneghetti.interact_colision);
+            // SDL_RenderDrawRect(game.renderer, &meneghetti.interact_colision);
+            // SDL_RenderDrawRect(game.renderer, &meneghetti.colision);
+            // SDL_RenderDrawRect(game.renderer, &boxes[8]);
         }
 
         SDL_RenderPresent(game.renderer);
@@ -377,26 +380,37 @@ SDL_Texture *create_txt(SDL_Renderer *render, char text, TTF_Font *font, SDL_Col
     return texture;
 }
 
-void create_dialogue(const Uint8 *keystate, SDL_Renderer *render, Text *text, int *player_state, double dt, Animation *meneghetti_face, Animation *python_face) {
+void create_dialogue(const Uint8 *keystate, SDL_Renderer *render, Text *text, int *player_state, double dt, Animation *meneghetti_face, Animation *python_face, double *anim_timer) {
     const Uint8 *keys = keystate ? keystate : SDL_GetKeyboardState(NULL);
+    
+    static int character = MENEGHETTI;
+    static double anim_cooldown = 0.2;
 
     static double e_cooldown = 0.0;
     e_cooldown += dt;
     bool e_pressed = keys[SDL_SCANCODE_E];
     
-    const char *writings[] = {"* Ola calvo, eu irei lhe mostrar a python", "* Bora bill, amostradinho", "* Teste, nao sei mais"};
+    const char *writings[] = {"* Eu estou sentindo a abstracao", "* Bora bill, amostradinho", "* Teste, nao sei mais"};
     int text_amount = sizeof(writings) / sizeof(writings[0]);
     const double timer_delay = 0.04;
     
-    SDL_Rect dialogue_box = {25, 25, SCREEN_WIDTH - 50, 150};
-    SDL_SetRenderDrawBlendMode(render, SDL_BLENDMODE_BLEND);
+    SDL_Rect dialogue_box = {25, SCREEN_HEIGHT - 175, SCREEN_WIDTH - 50, 150};
     SDL_SetRenderDrawColor(render, 0, 0, 0, 255);
     SDL_RenderFillRect(render, &dialogue_box);
 
-    text->text_box.x = dialogue_box.x + 25;
-    text->text_box.y = dialogue_box.y + 25;
+    // BORDAS:
+    SDL_Rect box_borders[] = {{dialogue_box.x, dialogue_box.y, dialogue_box.w, 5}, {dialogue_box.x, dialogue_box.y, 5, dialogue_box.h}, {dialogue_box.x, dialogue_box.y + 145, dialogue_box.w, 5}, {dialogue_box.x + dialogue_box.w - 5, dialogue_box.y, 5, dialogue_box.h}};
+    SDL_SetRenderDrawColor(render, 255, 255, 255, 255);
+    SDL_RenderFillRects(render, box_borders, 4);
+
+    SDL_Rect meneghetti_frame = {dialogue_box.x + 27, dialogue_box.y + 27, 72, 96};
+    SDL_Rect python_frame = {dialogue_box.x + 27, dialogue_box.y + 27, 96, 96};
+
+    text->text_box.x = dialogue_box.x + 130;
+    text->text_box.y = dialogue_box.y + 27;
 
     if (!text->waiting_for_input) {
+        *anim_timer += dt;
         text->timer += dt;
         if (e_pressed && e_cooldown >= 0.2) {
             const char *current = writings[text->cur_str];
@@ -452,6 +466,17 @@ void create_dialogue(const Uint8 *keystate, SDL_Renderer *render, Text *text, in
             e_cooldown = 0.0;
         }
     }
+    switch(text->cur_str) {
+        case 0:
+            character = MENEGHETTI;
+            break;
+        case 1:
+            character = PYTHON;
+            break;
+        default:
+            character = MENEGHETTI;
+            break;
+    }
 
     int pos_x = text->text_box.x;
     for (int i = 0; i < text->char_count; i++) {
@@ -466,6 +491,40 @@ void create_dialogue(const Uint8 *keystate, SDL_Renderer *render, Text *text, in
         
         pos_x += w;
     }
+
+    static int counters[] = {0, 0};
+    switch(character) {
+        case MENEGHETTI:
+            if (!text->waiting_for_input) {
+                while (*anim_timer >= anim_cooldown) {
+                    
+                    counters[0] = (counters[0] + 1) % meneghetti_face[0].count;
+                    *anim_timer = 0.0;
+                }
+                
+                SDL_RenderCopy(render, meneghetti_face[0].frames[counters[0] % meneghetti_face[0].count], NULL, &meneghetti_frame);
+            }
+            else {
+                counters[0] = 0;
+                SDL_RenderCopy(render, meneghetti_face[0].frames[0], NULL, &meneghetti_frame);
+            }
+            break;
+        case PYTHON:
+            if (!text->waiting_for_input) {
+                while (*anim_timer >= anim_cooldown) {
+                    
+                    counters[0] = (counters[0] + 1) % python_face->count;
+                    *anim_timer = 0.0;
+                }
+                
+                SDL_RenderCopy(render, python_face->frames[counters[0] % python_face->count], NULL, &python_frame);
+            }
+            else {
+                counters[0] = 0;
+                SDL_RenderCopy(render, python_face->frames[0], NULL, &python_frame);
+            }
+    }
+    
 
 }
 
@@ -502,7 +561,7 @@ void sprite_update(Character *scenario, Character *player, Animation *animation,
                 moving_up = true;
             }
             player->interact_colision.x = player->colision.x;
-            player->interact_colision.y = player->colision.y - 2;
+            player->interact_colision.y = player->colision.y - 6;
         } else {
             SDL_Rect test = player->colision;
             test.y -= move;
@@ -511,7 +570,7 @@ void sprite_update(Character *scenario, Character *player, Animation *animation,
                 moving_up = true;
             }
             player->interact_colision.x = player->colision.x;
-            player->interact_colision.y = player->colision.y - 2;
+            player->interact_colision.y = player->colision.y - 6;
         }
     }
 
