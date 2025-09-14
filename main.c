@@ -16,6 +16,7 @@
 #define IMAGE_FLAGS (IMG_INIT_PNG)
 #define MIXER_FLAGS (MIX_INIT_MP3 | MIX_INIT_OGG)
 #define COLLISION_QUANTITY 12
+#define SURFACE_QUANTITY 13
 #define DIALOGUE_FONT_SIZE 25
 #define MAX_DIALOGUE_CHAR 512
 #define MAX_DIALOGUE_STR 20
@@ -32,6 +33,7 @@ typedef struct {
     float sprite_vel; // Alterado para float para moldar a fluidez do movimento com base nos FPS.
     const Uint8 *keystate;
     SDL_Rect interact_collision;
+    int facing;
 } Character;
 typedef struct {
     SDL_Texture **frames; // Array de texturas.
@@ -63,9 +65,12 @@ SDL_Texture *create_texture(SDL_Renderer *render, const char *dir);
 SDL_Texture *create_txt(SDL_Renderer *render, const char *utf8_char, TTF_Font *font, SDL_Color color);
 void create_dialogue(const Uint8 *keystate, SDL_Renderer *render, Text *text, int *player_state, double dt, Animation *meneghetti_face, Animation *python_face, double *anim_timer, Mix_Chunk **sound);
 void reset_dialogue(Text *text);
-void sprite_update(Character *scenario, Character *player, Animation *animation, double dt, SDL_Rect boxes[], int box_count, double *anim_timer, double anim_interval, int counters[]);
+void sprite_update(Character *scenario, Character *player, Animation *animation, double dt, SDL_Rect boxes[], SDL_Rect surfaces[], double *anim_timer, double anim_interval, int counters[], Mix_Chunk **sound);
 bool rects_intersect(SDL_Rect *a, SDL_Rect *b);
 bool check_collision(SDL_Rect *player, SDL_Rect boxes[], int box_count);
+static int surface_to_sound_index(int surface_index);
+static int detect_surface(SDL_Rect *player, SDL_Rect surfaces[], int surface_count);
+
 static int utf8_charlen(const char *s);
 static int utf8_copy_char(const char *s, char *out);
 
@@ -150,7 +155,8 @@ int main(int argc, char* argv[]) {
         .collision = {(SCREEN_WIDTH / 2) - 10, (SCREEN_HEIGHT / 2) - 16, 19, 32},
         .sprite_vel = 100.0f, // Deve ser par.
         .keystate = SDL_GetKeyboardState(NULL),
-        .interact_collision = {(SCREEN_WIDTH / 2) - 10, (SCREEN_HEIGHT / 2) + 16, 19, 25}
+        .interact_collision = {(SCREEN_WIDTH / 2) - 10, (SCREEN_HEIGHT / 2) + 16, 19, 25},
+        .facing = DOWN
     };
     Character scenario = {
         .texture = create_texture(game.renderer, "assets/sprites/scenario/scenario.png"),
@@ -167,20 +173,24 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "Error loading sound: %s\n", Mix_GetError());
         return 1;
     }
-    Mix_VolumeChunk(ambience, 50);
+    Mix_VolumeChunk(ambience, 40);
 
-    Mix_Chunk* meneghetti_voice = Mix_LoadWAV("assets/sounds/sound_effects/in-game/meneghetti_voice.wav");
-    if (!meneghetti_voice) {
-        fprintf(stderr, "Error loading sound: %s\n", Mix_GetError());
-        return 1;
+    Mix_Chunk* walking_sounds[] = {Mix_LoadWAV("assets/sounds/sound_effects/in-game/walking_grass.wav"), Mix_LoadWAV("assets/sounds/sound_effects/in-game/walking_concrete.wav"), Mix_LoadWAV("assets/sounds/sound_effects/in-game/walking_sand.wav"), Mix_LoadWAV("assets/sounds/sound_effects/in-game/walking_bridge.wav"), Mix_LoadWAV("assets/sounds/sound_effects/in-game/walking_wood.wav"), Mix_LoadWAV("assets/sounds/sound_effects/in-game/walking_dirt.wav")};
+    for (int i = 0; i < 5; i++) {
+        if (!walking_sounds[i]) {
+            fprintf(stderr, "Error loading sound: %s\n", Mix_GetError());
+            return 1;
+        }
     }
+    Mix_Volume(0, 35); // Volume do canal dos efeitos sonoros.
 
-    Mix_Chunk* py_voice = Mix_LoadWAV("assets/sounds/sound_effects/in-game/mr_python_voice.wav");
-    if (!py_voice) {
-        fprintf(stderr, "Error loading sound: %s\n", Mix_GetError());
-        return 1;
+    Mix_Chunk* dialogue_voices[] = {Mix_LoadWAV("assets/sounds/sound_effects/in-game/meneghetti_voice.wav"), Mix_LoadWAV("assets/sounds/sound_effects/in-game/mr_python_voice.wav")};
+    for (int i = 0; i < 2; i++) {
+        if (!dialogue_voices[i]) {
+            fprintf(stderr, "Error loading sound: %s\n", Mix_GetError());
+            return 1;
+        }
     }
-    Mix_Chunk* dialogue_voices[] = {meneghetti_voice, py_voice};
 
     // BASES DE TEXTO:
     Text py_dialogue = {
@@ -261,6 +271,22 @@ int main(int argc, char* argv[]) {
                 ambience_begun = true;
             }
 
+            // SUPERFÍCIES:
+            SDL_Rect surfaces[SURFACE_QUANTITY];
+            surfaces[0] = (SDL_Rect){scenario.collision.x, scenario.collision.y + 569, 611, 135}; // Grama esquerda.
+            surfaces[1] = (SDL_Rect){scenario.collision.x + 669, scenario.collision.y + 569, 611, 135}; // Grama direita.
+            surfaces[2] = (SDL_Rect){scenario.collision.x + 653, scenario.collision.y + 590, 16, 49}; // Grama restante direita.
+            surfaces[3] = (SDL_Rect){scenario.collision.x, scenario.collision.y + 704, scenario.collision.w, 41}; // Calçada.
+            surfaces[4] = (SDL_Rect){scenario.collision.x + 981, scenario.collision.y + 745, 64, 72}; // Faixa de pedestres.
+            surfaces[5] = (SDL_Rect){scenario.collision.x + 981, scenario.collision.y + 817, 64, 40}; // Pedras.
+            surfaces[6] = (SDL_Rect){scenario.collision.x + 981, scenario.collision.y + 857, 64, 33}; // Areia.
+            surfaces[7] = (SDL_Rect){scenario.collision.x + 607, scenario.collision.y + 398, 66, 152}; // Ponte.
+            surfaces[8] = (SDL_Rect){scenario.collision.x + 253, scenario.collision.y + 106, 774, 278}; // Píer.
+            surfaces[9] = (SDL_Rect){scenario.collision.x + 607, scenario.collision.y + 550, 66, 19}; // Caminho de terra (topo).
+            surfaces[10] = (SDL_Rect){scenario.collision.x + 611, scenario.collision.y + 569, 58, 21}; // Caminho de terra (superior).
+            surfaces[11] = (SDL_Rect){scenario.collision.x + 611, scenario.collision.y + 590, 42, 49}; // Caminho de terra (meio).
+            surfaces[12] = (SDL_Rect){scenario.collision.x + 611, scenario.collision.y + 639, 58, 65}; // Caminho de terra (inferior).
+
             // COLISÕES:
             SDL_Rect boxes[COLLISION_QUANTITY];
             boxes[0] = (SDL_Rect){scenario.collision.x, scenario.collision.y + 739, 981, 221}; // Bloco inferior esquerdo.
@@ -277,7 +303,7 @@ int main(int argc, char* argv[]) {
             boxes[11] = (SDL_Rect){scenario.collision.x + 673, scenario.collision.y + 377, 11, 7}; // Toco direito da ponte.
 
             if (player_state == MOVABLE) {
-                sprite_update(&scenario, &meneghetti, anim_pack, dt, boxes, COLLISION_QUANTITY, &anim_timer, anim_interval, counters);
+                sprite_update(&scenario, &meneghetti, anim_pack, dt, boxes, surfaces, &anim_timer, anim_interval, counters, walking_sounds);
             }
             if (interaction_request) {
                 if (rects_intersect(&meneghetti.interact_collision, &boxes[8])) {
@@ -304,10 +330,8 @@ int main(int argc, char* argv[]) {
                     create_dialogue(meneghetti.keystate, game.renderer, &van_dialogue, &player_state, dt, meneghetti_dialogue, &python_dialogue, &anim_timer, dialogue_voices);
             }
 
-            SDL_SetRenderDrawColor(game.renderer, 255, 255, 255, 255);
-            // SDL_RenderDrawRect(game.renderer, &meneghetti.interact_collision);
-            // SDL_RenderDrawRect(game.renderer, &meneghetti.collision);
-            // SDL_RenderDrawRect(game.renderer, &boxes[8]);
+            SDL_SetRenderDrawColor(game.renderer, 255, 0, 0, 255);
+            // SDL_RenderDrawRects(game.renderer, surfaces, SURFACE_QUANTITY);
         }
 
         SDL_RenderPresent(game.renderer);
@@ -649,32 +673,60 @@ void reset_dialogue(Text *text) {
 
 }
 
-void sprite_update(Character *scenario, Character *player, Animation *animation, double dt, SDL_Rect boxes[], int box_count, double *anim_timer, double anim_interval, int counters[]) {
+void sprite_update(Character *scenario, Character *player, Animation *animation, double dt, SDL_Rect boxes[], SDL_Rect surfaces[], double *anim_timer, double anim_interval, int counters[], Mix_Chunk **sound) {
     const Uint8 *keys = player->keystate ? player->keystate : SDL_GetKeyboardState(NULL);
-    float move_vel = player->sprite_vel * (float)dt;
-    int move = (int)roundf(move_vel);
+    
+    bool raw_up = keys[SDL_SCANCODE_W];
+    bool raw_down = keys[SDL_SCANCODE_S];
+    bool raw_left = keys[SDL_SCANCODE_A];
+    bool raw_right = keys[SDL_SCANCODE_D];
 
-    if (move == 0 && move_vel != 0.0f) move = (move_vel > 0.0f) ? 1 : -1;
+    bool up = raw_up && !raw_down;
+    bool down = raw_down && !raw_up;
+    bool left = raw_left && !raw_right;
+    bool right = raw_right && !raw_left;
+
+    float move_vel = player->sprite_vel * (float)dt;
+
+    if ((up || down) && (left || right)) {
+        move_vel = sqrtf(2.0f);
+    }
+
+    int move_x = (int)truncf(move_vel);
+    int move_y = (int)truncf(move_vel);
 
     *anim_timer += dt;
 
     bool moving_up = false, moving_down = false, moving_left = false, moving_right = false;
+
+    if (up) {
+        player->facing = UP;
+    }
+    else if (down) {
+        player->facing = DOWN;
+    }
+    else if (left) {
+        player->facing = LEFT;
+    }
+    else if (right) {
+        player->facing = RIGHT;
+    }
     
-    if (keys[SDL_SCANCODE_W]) {
+    if (up) {
         if (scenario->collision.y < 0 && player->collision.y < (SCREEN_HEIGHT / 2) - 16) {
             SDL_Rect test = player->collision;
-            test.y -= move;
-            if (!check_collision(&test, boxes, box_count)) {
-                scenario->collision.y += move;
+            test.y -= move_y;
+            if (!check_collision(&test, boxes, COLLISION_QUANTITY)) {
+                scenario->collision.y += move_y;
                 moving_up = true;
             }
             player->interact_collision.x = player->collision.x;
             player->interact_collision.y = player->collision.y - 6;
         } else {
             SDL_Rect test = player->collision;
-            test.y -= move;
-            if (!check_collision(&test, boxes, box_count) && player->collision.y > 0) {
-                player->collision.y -= move;
+            test.y -= move_y;
+            if (!check_collision(&test, boxes, COLLISION_QUANTITY) && player->collision.y > 0) {
+                player->collision.y -= move_y;
                 moving_up = true;
             }
             player->interact_collision.x = player->collision.x;
@@ -682,21 +734,21 @@ void sprite_update(Character *scenario, Character *player, Animation *animation,
         }
     }
 
-    if (keys[SDL_SCANCODE_S]) {
+    if (down) {
         if (scenario->collision.y > -SCREEN_HEIGHT && player->collision.y > (SCREEN_HEIGHT / 2) - 16) {
             SDL_Rect test = player->collision;
-            test.y += move;
-            if (!check_collision(&test, boxes, box_count)) {
-                scenario->collision.y -= move;
+            test.y += move_y;
+            if (!check_collision(&test, boxes, COLLISION_QUANTITY)) {
+                scenario->collision.y -= move_y;
                 moving_down = true;
             }
             player->interact_collision.x = player->collision.x;
             player->interact_collision.y = player->collision.y + player->collision.h;
         } else {
             SDL_Rect test = player->collision;
-            test.y += move;
-            if (!check_collision(&test, boxes, box_count) && player->collision.y < SCREEN_HEIGHT - player->collision.h) {
-                player->collision.y += move;
+            test.y += move_y;
+            if (!check_collision(&test, boxes, COLLISION_QUANTITY) && player->collision.y < SCREEN_HEIGHT - player->collision.h) {
+                player->collision.y += move_y;
                 moving_down = true;
             }
             player->interact_collision.x = player->collision.x;
@@ -704,21 +756,21 @@ void sprite_update(Character *scenario, Character *player, Animation *animation,
         }
     }
 
-    if (keys[SDL_SCANCODE_A]) {
+    if (left) {
         if (scenario->collision.x < 0 && player->collision.x < (SCREEN_WIDTH / 2) - 10) {
             SDL_Rect test = player->collision;
-            test.x -= move;
-            if (!check_collision(&test, boxes, box_count)) {
-                scenario->collision.x += move;
+            test.x -= move_x;
+            if (!check_collision(&test, boxes, COLLISION_QUANTITY)) {
+                scenario->collision.x += move_x;
                 moving_left = true;
             }
             player->interact_collision.x = player->collision.x - player->interact_collision.w;
             player->interact_collision.y = (player->collision.y + player->collision.h) - player->interact_collision.h;
         } else {
             SDL_Rect test = player->collision;
-            test.x -= move;
-            if (!check_collision(&test, boxes, box_count) && player->collision.x > 0) {
-                player->collision.x -= move;
+            test.x -= move_x;
+            if (!check_collision(&test, boxes, COLLISION_QUANTITY) && player->collision.x > 0) {
+                player->collision.x -= move_x;
                 moving_left = true;
             }
             player->interact_collision.x = player->collision.x - player->interact_collision.w;
@@ -726,21 +778,21 @@ void sprite_update(Character *scenario, Character *player, Animation *animation,
         }
     }
 
-    if (keys[SDL_SCANCODE_D]) {
+    if (right) {
         if (scenario->collision.x > -SCREEN_WIDTH && player->collision.x > (SCREEN_WIDTH / 2) - 10) {
             SDL_Rect test = player->collision;
-            test.x += move; // cenário se move pra esquerda -> player aparente se move pra direita
-            if (!check_collision(&test, boxes, box_count)) {
-                scenario->collision.x -= move;
+            test.x += move_x;
+            if (!check_collision(&test, boxes, COLLISION_QUANTITY)) {
+                scenario->collision.x -= move_x;
                 moving_right = true;
             }
             player->interact_collision.x = player->collision.x + player->collision.w;
             player->interact_collision.y = (player->collision.y + player->collision.h) - player->interact_collision.h;
         } else {
             SDL_Rect test = player->collision;
-            test.x += move;
-            if (!check_collision(&test, boxes, box_count) && player->collision.x < SCREEN_WIDTH - player->collision.w) {
-                player->collision.x += move;
+            test.x += move_x;
+            if (!check_collision(&test, boxes, COLLISION_QUANTITY) && player->collision.x < SCREEN_WIDTH - player->collision.w) {
+                player->collision.x += move_x;
                 moving_right = true;
             }
             player->interact_collision.x = player->collision.x + player->collision.w;
@@ -776,6 +828,39 @@ void sprite_update(Character *scenario, Character *player, Animation *animation,
             *anim_timer = 0.0;
         }
     }
+    else {
+        counters[UP] = counters[DOWN] = counters[LEFT] = counters[RIGHT] = 0;
+
+        int face = player->facing;
+        if (face < 0 || face >= DIR_COUNT) face = DOWN;
+        player->texture = animation[face].frames[0];
+    }
+
+    static int current_walk_sound = -1;
+
+    if (moving_up || moving_down || moving_left || moving_right) {
+        int surface_index = detect_surface(&player->collision, surfaces, SURFACE_QUANTITY);
+        int new_sound_index = surface_to_sound_index(surface_index);
+
+        if (new_sound_index != current_walk_sound) {
+            if (Mix_Playing(0)) {
+                Mix_HaltChannel(0);
+            }
+
+            if (new_sound_index != -1) {
+                Mix_PlayChannel(0, sound[new_sound_index], -1);
+            }
+        }
+        current_walk_sound = new_sound_index;
+    }
+    else {
+        if (Mix_Playing(0)) {
+            Mix_HaltChannel(0);
+        }
+
+        current_walk_sound = -1;
+    }
+
 }
 
 bool rects_intersect(SDL_Rect *a, SDL_Rect *b) {
@@ -815,6 +900,49 @@ bool check_collision(SDL_Rect *player, SDL_Rect boxes[], int box_count) {
     }
 
     return false;
+
+}
+
+static int detect_surface(SDL_Rect *player, SDL_Rect surfaces[], int surface_count) {
+    SDL_Rect feet = {player->x, player->y + 29, player->w, 3};
+
+    int best_index = -1;
+    int best_overlap = 0;
+
+    for (int i = 0; i < surface_count; i++) {
+        SDL_Rect s = surfaces[i];
+
+        int ix = SDL_max(feet.x, s.x);
+        int iy = SDL_max(feet.y, s.y);
+        int ax = SDL_min(feet.x + feet.w, s.x + s.w);
+        int ay = SDL_min(feet.y + feet.h, s.y + s.h);
+
+        int overlap_w = ax - ix;
+        int overlap_h = ay - iy;
+        if (overlap_w > 0 && overlap_h > 0) {
+            int area = overlap_w * overlap_h;
+            if (area > best_overlap) {
+                best_overlap = area;
+                best_index = i;
+            }
+        }
+    }
+
+    return best_index;
+
+}
+
+static int surface_to_sound_index(int surface_index) {
+    if (surface_index < 0 || surface_index > 12) return -1;
+    if (surface_index == 0 || surface_index == 1 || surface_index == 2) return 0;
+    if (surface_index == 3  || surface_index == 4 || surface_index == 5) return 1;
+    if (surface_index == 6) return 2;
+    if (surface_index == 7) return 3;
+    if (surface_index == 8) return 4;
+    if (surface_index == 9 || surface_index == 10 || surface_index == 11 || surface_index == 12) return 4;
+
+    return -1;
+
 }
 
 static int utf8_charlen(const char *s) {
