@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <stdbool.h>
 #include <math.h>
 #include <SDL2/SDL.h>
@@ -14,7 +15,7 @@
 #define RENDERER_FLAGS (SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC)
 #define IMAGE_FLAGS (IMG_INIT_PNG)
 #define MIXER_FLAGS (MIX_INIT_MP3 | MIX_INIT_OGG)
-#define COLLISION_QUANTITY 10
+#define COLLISION_QUANTITY 12
 #define DIALOGUE_FONT_SIZE 25
 #define MAX_DIALOGUE_CHAR 512
 #define MAX_DIALOGUE_STR 20
@@ -44,7 +45,7 @@ typedef struct {
     SDL_Texture *chars[MAX_DIALOGUE_CHAR];
     int char_count;
     SDL_Rect text_box;
-    int cur_str, cur_char;
+    int cur_str, cur_byte;
     double timer;
     bool waiting_for_input;
 } Text;
@@ -59,12 +60,14 @@ bool sdl_initialize(Game *game);
 void object_cleanup(SDL_Texture *obj);
 void game_cleanup(Game *game, int exit_status);
 SDL_Texture *create_texture(SDL_Renderer *render, const char *dir);
-SDL_Texture *create_txt(SDL_Renderer *render, char text, TTF_Font *font, SDL_Color color);
+SDL_Texture *create_txt(SDL_Renderer *render, const char *utf8_char, TTF_Font *font, SDL_Color color);
 void create_dialogue(const Uint8 *keystate, SDL_Renderer *render, Text *text, int *player_state, double dt, Animation *meneghetti_face, Animation *python_face, double *anim_timer, Mix_Chunk **sound);
 void reset_dialogue(Text *text);
 void sprite_update(Character *scenario, Character *player, Animation *animation, double dt, SDL_Rect boxes[], int box_count, double *anim_timer, double anim_interval, int counters[]);
 bool rects_intersect(SDL_Rect *a, SDL_Rect *b);
 bool check_collision(SDL_Rect *player, SDL_Rect boxes[], int box_count);
+static int utf8_charlen(const char *s);
+static int utf8_copy_char(const char *s, char *out);
 
 int main(int argc, char* argv[]) {
     (void) argc;
@@ -181,14 +184,14 @@ int main(int argc, char* argv[]) {
 
     // BASES DE TEXTO:
     Text py_dialogue = {
-        .writings = {"* Python, hoje sera o dia de sua  ruina.", "* Vem pra cima carecao kkkkkkkk   azidea", "* Cobra miseravel, vai tomar de 7 a 0 comedia."},
+        .writings = {"* Python, hoje é o dia de sua ruína.", "* Vem pra cima então calvão kkkk", "* Para você é Super C, comédia."},
         .on_frame = {MENEGHETTI, PYTHON, MENEGHETTI_ANGRY},
         .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", DIALOGUE_FONT_SIZE),
         .text_color = {255, 255, 255, 255},
         .char_count = 0,
         .text_box = {0, 0, 0, 0},
         .cur_str = 0,
-        .cur_char = 0,
+        .cur_byte = 0,
         .timer = 0.0,
         .waiting_for_input = false
     };
@@ -198,14 +201,14 @@ int main(int argc, char* argv[]) {
     }
 
     Text van_dialogue = {
-        .writings = {"* Python safado, essa e a van do mercado livre", "* Isso nao vai ficar assim", "* Preciso do meu cigarro cubano", "* Este e um texto deveras longo para testar a nova funcao de quebra de linha, e os guri. AOOOOOOOOBA, AOOOOOOOOO POTENCIAAAAA AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"},
+        .writings = {"* Python safado, essa é a van do Mercado Livre!", "* Isso não vai ficar assim.", "* Preciso do meu cigarro cubano...", "* A todo instante, estamos suscetíveis a um jogo universal de cara ou coroa que rege a nossa existência. A todo momento podemos cessar dessa vida sem mais nem menos, pois o universo e suas leis são infinitamente maiores do que a mente humana é capaz de alcançar."},
         .on_frame = {MENEGHETTI_ANGRY, MENEGHETTI_ANGRY, MENEGHETTI, MENEGHETTI},
         .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", DIALOGUE_FONT_SIZE),
         .text_color = {255, 255, 255, 255},
         .char_count = 0,
         .text_box = {0, 0, 0, 0},
         .cur_str = 0,
-        .cur_char = 0,
+        .cur_byte = 0,
         .timer = 0.0,
         .waiting_for_input = false
     };
@@ -270,6 +273,8 @@ int main(int argc, char* argv[]) {
             boxes[7] = (SDL_Rect){scenario.collision.x + 981, scenario.collision.y + 890, 64, 70}; // Bloco do rodapé (lago).
             boxes[8] = (SDL_Rect){scenario.collision.x + 620, scenario.collision.y + 153, 39, 40}; // Bloco do Mr. Python.
             boxes[9] = (SDL_Rect){scenario.collision.x + 758, scenario.collision.y + 592, 64, 4}; // Bloco da Python Van.
+            boxes[10] = (SDL_Rect){scenario.collision.x + 596, scenario.collision.y + 377, 11, 7}; // Toco esquerdo da ponte.
+            boxes[11] = (SDL_Rect){scenario.collision.x + 673, scenario.collision.y + 377, 11, 7}; // Toco direito da ponte.
 
             if (player_state == MOVABLE) {
                 sprite_update(&scenario, &meneghetti, anim_pack, dt, boxes, COLLISION_QUANTITY, &anim_timer, anim_interval, counters);
@@ -412,12 +417,12 @@ SDL_Texture *create_texture(SDL_Renderer *render, const char *dir) {
     return texture;
 }
 
-SDL_Texture *create_txt(SDL_Renderer *render, char text, TTF_Font *font, SDL_Color color) {
-    const char array[2] = {text, '\0'};
+SDL_Texture *create_txt(SDL_Renderer *render, const char *utf8_text, TTF_Font *font, SDL_Color color) {
+    if (!utf8_text || !utf8_text[0]) return NULL;
 
-    SDL_Surface* surface = TTF_RenderText_Solid(font, array, color);
+    SDL_Surface* surface = TTF_RenderUTF8_Solid(font, utf8_text, color);
     if (!surface) {
-        fprintf(stderr, "Error loading text surface: %s", TTF_GetError());
+        fprintf(stderr, "Error loading text surface (text '%s'): %s", utf8_text, TTF_GetError());
         return NULL;
     }
 
@@ -427,8 +432,10 @@ SDL_Texture *create_txt(SDL_Renderer *render, char text, TTF_Font *font, SDL_Col
         SDL_FreeSurface(surface);
         return NULL;
     }
+
     SDL_FreeSurface(surface);
     return texture;
+
 }
 
 void create_dialogue(const Uint8 *keystate, SDL_Renderer *render, Text *text, int *player_state, double dt, Animation *meneghetti_face, Animation *python_face, double *anim_timer, Mix_Chunk **sound) {
@@ -480,13 +487,15 @@ void create_dialogue(const Uint8 *keystate, SDL_Renderer *render, Text *text, in
         text->timer += dt;
         if (e_pressed) {
             const char *current = text->writings[text->cur_str];
-            while (current[text->cur_char] != '\0' && text->char_count < MAX_DIALOGUE_CHAR) {
-                char render_char = current[text->cur_char];
-                text->chars[text->char_count] = create_txt(render, render_char, text->text_font, text->text_color);
-                if (text->chars[text->char_count]) {
+            while (current[text->cur_byte] != '\0' && text->char_count < MAX_DIALOGUE_CHAR) {
+                char utf8_buffer[5];
+                int n = utf8_copy_char(&current[text->cur_byte], utf8_buffer);
+                SDL_Texture* t = create_txt(render, utf8_buffer, text->text_font, text->text_color);
+                if (t) {
+                    text->chars[text->char_count] = t;
                     text->char_count++;
                 }
-                text->cur_char++;
+                text->cur_byte += n;
             }
             text->waiting_for_input = true;
         }
@@ -494,18 +503,18 @@ void create_dialogue(const Uint8 *keystate, SDL_Renderer *render, Text *text, in
             text->timer = 0.0;
             const char *current = text->writings[text->cur_str];
             
-            if (current[text->cur_char] == '\0') {
-                current = text->writings[text->cur_str];
+            if (current[text->cur_byte] == '\0') {
                 text->waiting_for_input = true;
             }
             else {
                 if (text->char_count < MAX_DIALOGUE_CHAR) {
-                    char render_char = current[text->cur_char];
-                    text->chars[text->char_count] = create_txt(render, render_char, text->text_font, text->text_color);
-                    if (text->chars[text->char_count]) {
+                    char utf8_buffer[5];
+                    int n = utf8_copy_char(&current[text->cur_byte], utf8_buffer);
+                    SDL_Texture* t = create_txt(render, utf8_buffer, text->text_font, text->text_color);
+                    if (t) {
                         if (sound && sfx_timer >= sfx_cooldown) {
                             int speaker = text->on_frame[text->cur_str];
-                            Mix_Chunk *chunk = NULL;
+                            Mix_Chunk* chunk =  NULL;
 
                             if (speaker == MENEGHETTI || speaker == MENEGHETTI_ANGRY) {
                                 chunk = sound[0];
@@ -519,10 +528,11 @@ void create_dialogue(const Uint8 *keystate, SDL_Renderer *render, Text *text, in
                             }
                             sfx_timer = 0.0;
                         }
+                        text->chars[text->char_count] = t;
                         text->char_count++;
                     }
+                    text->cur_byte += n;
                 }
-                text->cur_char++;
             }
         }
     }
@@ -535,7 +545,7 @@ void create_dialogue(const Uint8 *keystate, SDL_Renderer *render, Text *text, in
                 }
             }
             text->char_count = 0;
-            text->cur_char = 0;
+            text->cur_byte = 0;
             text->cur_str++;
 
             text->waiting_for_input = false;
@@ -548,23 +558,30 @@ void create_dialogue(const Uint8 *keystate, SDL_Renderer *render, Text *text, in
     }
 
     int pos_x = text->text_box.x;
+    int pos_y = text->text_box.y;
     for (int i = 0; i < text->char_count; i++) {
         SDL_Texture *ct = text->chars[i];
-        if (!ct)
-            continue;
+        if (!ct) continue;
         
-        SDL_Rect dst = {pos_x, text->text_box.y, 13, 25};
+        int w = 0, h = 0;
+        SDL_QueryTexture(ct, NULL, NULL, &w, &h);
+        if (w == 0) w = 8;
+        if (h == 0) h = 16;
+
+        SDL_Rect dst = {pos_x, pos_y, w, h};
         SDL_RenderCopy(render, ct, NULL, &dst);
         
-        if (pos_x + dst.w >= dialogue_box.x + dialogue_box.w - 25) {
+        if (pos_x + dst.w >= dialogue_box.x + dialogue_box.w - 50) {
             pos_x = text->text_box.x;
-            text->text_box.y += dst.h;
+            pos_y += h;
         }
         else
             pos_x += dst.w;
 
-        if (text->text_box.y >= dialogue_box.y + dialogue_box.h - 27)
+        if (pos_y >= dialogue_box.y + dialogue_box.h - 27) {
+            text->waiting_for_input = true;
             break;
+        }
     }
 
     static int counters[] = {0, 0};
@@ -614,7 +631,6 @@ void create_dialogue(const Uint8 *keystate, SDL_Renderer *render, Text *text, in
                 SDL_RenderCopy(render, python_face->frames[0], NULL, &python_frame);
             }
     }
-    
 
 }
 
@@ -627,8 +643,10 @@ void reset_dialogue(Text *text) {
     }
     text->char_count = 0;
     text->cur_str = 0;
-    text->cur_char = 0;
+    text->cur_byte = 0;
     text->timer = 0.0;
+    text->waiting_for_input = false;
+
 }
 
 void sprite_update(Character *scenario, Character *player, Animation *animation, double dt, SDL_Rect boxes[], int box_count, double *anim_timer, double anim_interval, int counters[]) {
@@ -797,4 +815,24 @@ bool check_collision(SDL_Rect *player, SDL_Rect boxes[], int box_count) {
     }
 
     return false;
+}
+
+static int utf8_charlen(const char *s) {
+    unsigned char c = (unsigned char)s[0];
+    if ((c & 0x80) == 0x00) return 1;
+    if ((c & 0xE0) == 0xC0) return 2;
+    if ((c & 0xF0) == 0xE0) return 3;
+    if ((c & 0xF8) == 0xF0) return 4;
+    return 1;
+
+}
+
+static int utf8_copy_char(const char *s, char *out) {
+    int n = utf8_charlen(s);
+    for (int i = 0; i < n; i++) {
+        out[i] = s[i];
+    }
+    out[n] = '\0';
+    return n;
+
 }
