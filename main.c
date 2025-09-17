@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <math.h>
+#include <string.h>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_ttf.h>
@@ -45,6 +46,7 @@ typedef struct {
     TTF_Font *text_font;
     SDL_Color text_color;
     SDL_Texture *chars[MAX_DIALOGUE_CHAR];
+    char chars_string[MAX_DIALOGUE_CHAR][5];
     int char_count;
     SDL_Rect text_box;
     int cur_str, cur_byte;
@@ -55,7 +57,7 @@ typedef struct {
 enum direction { UP, DOWN, LEFT, RIGHT, DIR_COUNT };
 enum game_states { TITLE_SCREEN, CUTSCENE, OPEN_WORLD, BATTLE_SCREEN };
 enum player_states { MOVABLE, DIALOGUE, PAUSE, DEAD };
-enum characters { MENEGHETTI, MENEGHETTI_ANGRY, PYTHON};
+enum characters { MENEGHETTI, MENEGHETTI_ANGRY, MENEGHETTI_SAD, PYTHON};
 
 bool sdl_initialize(Game *game);
 // bool load_media(Game *game);
@@ -122,7 +124,7 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    Animation meneghetti_dialogue[2];
+    Animation meneghetti_dialogue[3];
     meneghetti_dialogue[0].count = 2;
     meneghetti_dialogue[0].frames = malloc(sizeof(SDL_Texture*) * meneghetti_dialogue[0].count);
     meneghetti_dialogue[0].frames[0] = create_texture(game.renderer, "assets/sprites/characters/meneghetti-dialogue-1.png");
@@ -131,6 +133,10 @@ int main(int argc, char* argv[]) {
     meneghetti_dialogue[1].frames = malloc(sizeof(SDL_Texture*) * meneghetti_dialogue[1].count);
     meneghetti_dialogue[1].frames[0] = create_texture(game.renderer, "assets/sprites/characters/meneghetti-dialogue-angry-1.png");
     meneghetti_dialogue[1].frames[1] = create_texture(game.renderer, "assets/sprites/characters/meneghetti-dialogue-angry-2.png");
+    meneghetti_dialogue[2].count = 2;
+    meneghetti_dialogue[2].frames = malloc(sizeof(SDL_Texture*) * meneghetti_dialogue[2].count);
+    meneghetti_dialogue[2].frames[0] = create_texture(game.renderer, "assets/sprites/characters/meneghetti-dialogue-sad-1.png");
+    meneghetti_dialogue[2].frames[1] = create_texture(game.renderer, "assets/sprites/characters/meneghetti-dialogue-sad-2.png");
     for (int i = 0; i < 2; i++) {
         for (int n = 0; n < meneghetti_dialogue[i].count; n++) {
             if (!meneghetti_dialogue[i].frames[n]) {
@@ -173,7 +179,7 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "Error loading sound: %s\n", Mix_GetError());
         return 1;
     }
-    Mix_VolumeChunk(ambience, 40);
+    Mix_VolumeChunk(ambience, 35);
 
     Mix_Chunk* walking_sounds[] = {Mix_LoadWAV("assets/sounds/sound_effects/in-game/walking_grass.wav"), Mix_LoadWAV("assets/sounds/sound_effects/in-game/walking_concrete.wav"), Mix_LoadWAV("assets/sounds/sound_effects/in-game/walking_sand.wav"), Mix_LoadWAV("assets/sounds/sound_effects/in-game/walking_bridge.wav"), Mix_LoadWAV("assets/sounds/sound_effects/in-game/walking_wood.wav"), Mix_LoadWAV("assets/sounds/sound_effects/in-game/walking_dirt.wav")};
     for (int i = 0; i < 5; i++) {
@@ -194,8 +200,8 @@ int main(int argc, char* argv[]) {
 
     // BASES DE TEXTO:
     Text py_dialogue = {
-        .writings = {"* Python, hoje é o dia de sua ruína.", "* Vem pra cima então calvão kkkk", "* Para você é Super C, comédia."},
-        .on_frame = {MENEGHETTI, PYTHON, MENEGHETTI_ANGRY},
+        .writings = {"* Python, hoje você vai ter um dia ruim.", "* A linguagem C prevalecerá!", "* O mundo não quer mais saber de C, Java, toda essa porcaria.", "* O mundo está em alto nível agora. A tecnologia existe com tal objetivo desde sempre.", "* Por enquanto. O conhecimento deve se manter ativo, sem passividades de abstração."},
+        .on_frame = {MENEGHETTI_ANGRY, MENEGHETTI_ANGRY, PYTHON, PYTHON, MENEGHETTI},
         .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", DIALOGUE_FONT_SIZE),
         .text_color = {255, 255, 255, 255},
         .char_count = 0,
@@ -211,8 +217,8 @@ int main(int argc, char* argv[]) {
     }
 
     Text van_dialogue = {
-        .writings = {"* Python safado, essa é a van do Mercado Livre!", "* Isso não vai ficar assim.", "* Preciso do meu cigarro cubano...", "* A todo instante, estamos suscetíveis a um jogo universal de cara ou coroa que rege a nossa existência. A todo momento podemos cessar dessa vida sem mais nem menos, pois o universo e suas leis são infinitamente maiores do que a mente humana é capaz de alcançar."},
-        .on_frame = {MENEGHETTI_ANGRY, MENEGHETTI_ANGRY, MENEGHETTI, MENEGHETTI},
+        .writings = {"* Uma van com a logo do satanás estampada nela.", "* Então eu vim ao lugar correto, é aqui que o meu nêmesis está hospedado...", "* Saudades dos velhos tempos de linguagem de baixo nível."},
+        .on_frame = {MENEGHETTI, MENEGHETTI_ANGRY, MENEGHETTI_SAD},
         .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", DIALOGUE_FONT_SIZE),
         .text_color = {255, 255, 255, 255},
         .char_count = 0,
@@ -517,6 +523,7 @@ void create_dialogue(const Uint8 *keystate, SDL_Renderer *render, Text *text, in
                 SDL_Texture* t = create_txt(render, utf8_buffer, text->text_font, text->text_color);
                 if (t) {
                     text->chars[text->char_count] = t;
+                    strcpy(text->chars_string[text->char_count], utf8_buffer);
                     text->char_count++;
                 }
                 text->cur_byte += n;
@@ -540,7 +547,7 @@ void create_dialogue(const Uint8 *keystate, SDL_Renderer *render, Text *text, in
                             int speaker = text->on_frame[text->cur_str];
                             Mix_Chunk* chunk =  NULL;
 
-                            if (speaker == MENEGHETTI || speaker == MENEGHETTI_ANGRY) {
+                            if (speaker == MENEGHETTI || speaker == MENEGHETTI_ANGRY || speaker ==  MENEGHETTI_SAD) {
                                 chunk = sound[0];
                             }
                             if (speaker == PYTHON) {
@@ -553,6 +560,7 @@ void create_dialogue(const Uint8 *keystate, SDL_Renderer *render, Text *text, in
                             sfx_timer = 0.0;
                         }
                         text->chars[text->char_count] = t;
+                        strcpy(text->chars_string[text->char_count], utf8_buffer);
                         text->char_count++;
                     }
                     text->cur_byte += n;
@@ -583,26 +591,89 @@ void create_dialogue(const Uint8 *keystate, SDL_Renderer *render, Text *text, in
 
     int pos_x = text->text_box.x;
     int pos_y = text->text_box.y;
+    int max_x = dialogue_box.x + dialogue_box.w - 50;
+    int line_height = 0;
+
     for (int i = 0; i < text->char_count; i++) {
-        SDL_Texture *ct = text->chars[i];
+        SDL_Texture* ct = text->chars[i];
         if (!ct) continue;
-        
-        int w = 0, h = 0;
+
+        int w, h;
+        SDL_QueryTexture(ct, NULL, NULL, &w, &h);
+        if (h > line_height) line_height = h;
+    }
+
+    int current_x = pos_x;
+    int current_y = pos_y;
+    int word_width = 0;
+    int word_start = -1;
+
+    for (int i = 0; i < text->char_count; i++) {
+        SDL_Texture* ct = text->chars[i];
+        if (!ct) continue;
+
+        int w, h;
         SDL_QueryTexture(ct, NULL, NULL, &w, &h);
         if (w == 0) w = 8;
         if (h == 0) h = 16;
 
-        SDL_Rect dst = {pos_x, pos_y, w, h};
-        SDL_RenderCopy(render, ct, NULL, &dst);
-        
-        if (pos_x + dst.w >= dialogue_box.x + dialogue_box.w - 50) {
-            pos_x = text->text_box.x;
-            pos_y += h;
-        }
-        else
-            pos_x += dst.w;
+        int is_space = (strcmp(text->chars_string[i], " ") == 0);
 
-        if (pos_y >= dialogue_box.y + dialogue_box.h - 27) {
+        if (!is_space && word_start == -1) {
+            word_start = i;
+            word_width = 0;
+        }
+
+        if (!is_space) {
+            word_width += w;
+        }
+
+        if (is_space || i == text->char_count - 1) {
+            if (word_start != -1) {
+                if (current_x + word_width > max_x) {
+                    current_x = pos_x;
+                    current_y += line_height;
+                    line_height = 0;
+
+                    for (int j = word_start; j <= i; j++) {
+                        SDL_Texture* char_tex = text->chars[j];
+                        if (!char_tex) continue;
+
+                        int ch;
+                        SDL_QueryTexture(char_tex, NULL, NULL, NULL, &ch);
+                        if (ch > line_height) line_height = ch;
+                    }
+                }
+
+                for (int j = word_start; j <= i; j++) {
+                    SDL_Texture* char_tex = text->chars[j];
+                    if (!char_tex) continue;
+
+                    int cw, ch;
+                    SDL_QueryTexture(char_tex, NULL, NULL, &cw, &ch);
+                    SDL_Rect dst = {current_x, current_y, cw, ch};
+                    SDL_RenderCopy(render, char_tex, NULL, &dst);
+                    current_x += cw;
+                }
+
+                word_start = -1;
+                word_width = 0;
+            }
+
+            if (is_space) {
+                if (current_x + w > max_x) {
+                    current_x = pos_x;
+                    current_y += line_height;
+                    line_height = h;
+                }
+
+                SDL_Rect dst = {current_x, current_y, w, h};
+                SDL_RenderCopy(render, ct, NULL, &dst);
+                current_x += w;
+            }
+        }
+
+        if (current_y + line_height > dialogue_box.y + dialogue_box.h - 27) {
             text->waiting_for_input = true;
             break;
         }
@@ -638,6 +709,21 @@ void create_dialogue(const Uint8 *keystate, SDL_Renderer *render, Text *text, in
             else {
                 counters[0] = 0;
                 SDL_RenderCopy(render, meneghetti_face[1].frames[0], NULL, &meneghetti_frame);
+            }
+            break;
+        case MENEGHETTI_SAD:
+            if (!text->waiting_for_input) {
+                while (*anim_timer >= anim_cooldown) {
+                    
+                    counters[0] = (counters[0] + 1) % meneghetti_face[2].count;
+                    *anim_timer = 0.0;
+                }
+                
+                SDL_RenderCopy(render, meneghetti_face[2].frames[counters[0] % meneghetti_face[2].count], NULL, &meneghetti_frame);
+            }
+            else {
+                counters[0] = 0;
+                SDL_RenderCopy(render, meneghetti_face[2].frames[0], NULL, &meneghetti_frame);
             }
             break;
         case PYTHON:
@@ -687,13 +773,9 @@ void sprite_update(Character *scenario, Character *player, Animation *animation,
     bool right = raw_right && !raw_left;
 
     float move_vel = player->sprite_vel * (float)dt;
+    int move = (int)roundf(move_vel);
 
-    if ((up || down) && (left || right)) {
-        move_vel = sqrtf(2.0f);
-    }
-
-    int move_x = (int)truncf(move_vel);
-    int move_y = (int)truncf(move_vel);
+    if (move == 0 && move_vel != 0.0f) move = (move_vel > 0.0f) ? 1 : -1;
 
     *anim_timer += dt;
 
@@ -715,18 +797,18 @@ void sprite_update(Character *scenario, Character *player, Animation *animation,
     if (up) {
         if (scenario->collision.y < 0 && player->collision.y < (SCREEN_HEIGHT / 2) - 16) {
             SDL_Rect test = player->collision;
-            test.y -= move_y;
+            test.y -= move;
             if (!check_collision(&test, boxes, COLLISION_QUANTITY)) {
-                scenario->collision.y += move_y;
+                scenario->collision.y += move;
                 moving_up = true;
             }
             player->interact_collision.x = player->collision.x;
             player->interact_collision.y = player->collision.y - 6;
         } else {
             SDL_Rect test = player->collision;
-            test.y -= move_y;
+            test.y -= move;
             if (!check_collision(&test, boxes, COLLISION_QUANTITY) && player->collision.y > 0) {
-                player->collision.y -= move_y;
+                player->collision.y -= move;
                 moving_up = true;
             }
             player->interact_collision.x = player->collision.x;
@@ -737,18 +819,18 @@ void sprite_update(Character *scenario, Character *player, Animation *animation,
     if (down) {
         if (scenario->collision.y > -SCREEN_HEIGHT && player->collision.y > (SCREEN_HEIGHT / 2) - 16) {
             SDL_Rect test = player->collision;
-            test.y += move_y;
+            test.y += move;
             if (!check_collision(&test, boxes, COLLISION_QUANTITY)) {
-                scenario->collision.y -= move_y;
+                scenario->collision.y -= move;
                 moving_down = true;
             }
             player->interact_collision.x = player->collision.x;
             player->interact_collision.y = player->collision.y + player->collision.h;
         } else {
             SDL_Rect test = player->collision;
-            test.y += move_y;
+            test.y += move;
             if (!check_collision(&test, boxes, COLLISION_QUANTITY) && player->collision.y < SCREEN_HEIGHT - player->collision.h) {
-                player->collision.y += move_y;
+                player->collision.y += move;
                 moving_down = true;
             }
             player->interact_collision.x = player->collision.x;
@@ -759,18 +841,18 @@ void sprite_update(Character *scenario, Character *player, Animation *animation,
     if (left) {
         if (scenario->collision.x < 0 && player->collision.x < (SCREEN_WIDTH / 2) - 10) {
             SDL_Rect test = player->collision;
-            test.x -= move_x;
+            test.x -= move;
             if (!check_collision(&test, boxes, COLLISION_QUANTITY)) {
-                scenario->collision.x += move_x;
+                scenario->collision.x += move;
                 moving_left = true;
             }
             player->interact_collision.x = player->collision.x - player->interact_collision.w;
             player->interact_collision.y = (player->collision.y + player->collision.h) - player->interact_collision.h;
         } else {
             SDL_Rect test = player->collision;
-            test.x -= move_x;
+            test.x -= move;
             if (!check_collision(&test, boxes, COLLISION_QUANTITY) && player->collision.x > 0) {
-                player->collision.x -= move_x;
+                player->collision.x -= move;
                 moving_left = true;
             }
             player->interact_collision.x = player->collision.x - player->interact_collision.w;
@@ -781,18 +863,18 @@ void sprite_update(Character *scenario, Character *player, Animation *animation,
     if (right) {
         if (scenario->collision.x > -SCREEN_WIDTH && player->collision.x > (SCREEN_WIDTH / 2) - 10) {
             SDL_Rect test = player->collision;
-            test.x += move_x;
+            test.x += move;
             if (!check_collision(&test, boxes, COLLISION_QUANTITY)) {
-                scenario->collision.x -= move_x;
+                scenario->collision.x -= move;
                 moving_right = true;
             }
             player->interact_collision.x = player->collision.x + player->collision.w;
             player->interact_collision.y = (player->collision.y + player->collision.h) - player->interact_collision.h;
         } else {
             SDL_Rect test = player->collision;
-            test.x += move_x;
+            test.x += move;
             if (!check_collision(&test, boxes, COLLISION_QUANTITY) && player->collision.x < SCREEN_WIDTH - player->collision.w) {
-                player->collision.x += move_x;
+                player->collision.x += move;
                 moving_right = true;
             }
             player->interact_collision.x = player->collision.x + player->collision.w;
@@ -939,7 +1021,7 @@ static int surface_to_sound_index(int surface_index) {
     if (surface_index == 6) return 2;
     if (surface_index == 7) return 3;
     if (surface_index == 8) return 4;
-    if (surface_index == 9 || surface_index == 10 || surface_index == 11 || surface_index == 12) return 4;
+    if (surface_index == 9 || surface_index == 10 || surface_index == 11 || surface_index == 12) return 5;
 
     return -1;
 
