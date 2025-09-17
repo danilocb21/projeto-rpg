@@ -57,7 +57,7 @@ typedef struct {
 enum direction { UP, DOWN, LEFT, RIGHT, DIR_COUNT };
 enum game_states { TITLE_SCREEN, CUTSCENE, OPEN_WORLD, BATTLE_SCREEN };
 enum player_states { MOVABLE, DIALOGUE, PAUSE, DEAD };
-enum characters { MENEGHETTI, MENEGHETTI_ANGRY, MENEGHETTI_SAD, PYTHON};
+enum characters { MENEGHETTI, MENEGHETTI_ANGRY, MENEGHETTI_SAD, PYTHON, NONE};
 
 bool sdl_initialize(Game *game);
 // bool load_media(Game *game);
@@ -190,7 +190,7 @@ int main(int argc, char* argv[]) {
     }
     Mix_Volume(0, 35); // Volume do canal dos efeitos sonoros.
 
-    Mix_Chunk* dialogue_voices[] = {Mix_LoadWAV("assets/sounds/sound_effects/in-game/meneghetti_voice.wav"), Mix_LoadWAV("assets/sounds/sound_effects/in-game/mr_python_voice.wav")};
+    Mix_Chunk* dialogue_voices[] = {Mix_LoadWAV("assets/sounds/sound_effects/in-game/meneghetti_voice.wav"), Mix_LoadWAV("assets/sounds/sound_effects/in-game/mr_python_voice.wav"), Mix_LoadWAV("assets/sounds/sound_effects/in-game/text_typing.wav")};
     for (int i = 0; i < 2; i++) {
         if (!dialogue_voices[i]) {
             fprintf(stderr, "Error loading sound: %s\n", Mix_GetError());
@@ -232,6 +232,19 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "Error loading font: %s", TTF_GetError());
         return 1;
     }
+
+    Text lake_dialogue = {
+        .writings = {"* O lago sem animação te faz pensar sobre os esforços do criador deste universo.", "* Isso te enche de determinação.", "* Isso me enche de vontade de pescar."},
+        .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", DIALOGUE_FONT_SIZE),
+        .on_frame = {NONE, NONE, MENEGHETTI},
+        .text_color = {255, 255, 255, 255},
+        .char_count = 0,
+        .text_box = {0, 0, 0, 0},
+        .cur_str = 0,
+        .cur_byte = 0,
+        .timer = 0.0,
+        .waiting_for_input = false
+    };
 
     Uint32 last_ticks = SDL_GetTicks();
     double anim_timer = 0.0;
@@ -312,13 +325,14 @@ int main(int argc, char* argv[]) {
                 sprite_update(&scenario, &meneghetti, anim_pack, dt, boxes, surfaces, &anim_timer, anim_interval, counters, walking_sounds);
             }
             if (interaction_request) {
-                if (rects_intersect(&meneghetti.interact_collision, &boxes[8])) {
+                if (rects_intersect(&meneghetti.interact_collision, &boxes[8]))
                     player_state = DIALOGUE;
-                }
 
-                if (rects_intersect(&meneghetti.interact_collision, &boxes[9])) {
+                if (rects_intersect(&meneghetti.interact_collision, &boxes[9]))
                     player_state = DIALOGUE;
-                }
+                
+                if (rects_intersect(&meneghetti.interact_collision, &boxes[7]))
+                    player_state = DIALOGUE;
 
                 interaction_request = false;
             }
@@ -332,8 +346,12 @@ int main(int argc, char* argv[]) {
             if (player_state == DIALOGUE) {
                 if (rects_intersect (&meneghetti.interact_collision, &boxes[8]))
                     create_dialogue(meneghetti.keystate, game.renderer, &py_dialogue, &player_state, dt, meneghetti_dialogue, &python_dialogue, &anim_timer, dialogue_voices);
+
                 if (rects_intersect (&meneghetti.interact_collision, &boxes[9]))
                     create_dialogue(meneghetti.keystate, game.renderer, &van_dialogue, &player_state, dt, meneghetti_dialogue, &python_dialogue, &anim_timer, dialogue_voices);
+                    
+                if (rects_intersect (&meneghetti.interact_collision, &boxes[7]))
+                    create_dialogue(meneghetti.keystate, game.renderer, &lake_dialogue, &player_state, dt, meneghetti_dialogue, &python_dialogue, &anim_timer, dialogue_voices);
             }
 
             SDL_SetRenderDrawColor(game.renderer, 255, 0, 0, 255);
@@ -505,8 +523,14 @@ void create_dialogue(const Uint8 *keystate, SDL_Renderer *render, Text *text, in
     SDL_Rect meneghetti_frame = {dialogue_box.x + 27, dialogue_box.y + 27, 72, 96};
     SDL_Rect python_frame = {dialogue_box.x + 27, dialogue_box.y + 27, 96, 96};
 
-    text->text_box.x = dialogue_box.x + 130;
-    text->text_box.y = dialogue_box.y + 27;
+    if (text->on_frame[text->cur_str] != NONE) {
+        text->text_box.x = dialogue_box.x + 130;
+        text->text_box.y = dialogue_box.y + 27;
+    }
+    else {
+        text->text_box.x = dialogue_box.x + 27;
+        text->text_box.y = dialogue_box.y + 27;
+    }
 
     static double sfx_timer = 0.0;
     const double sfx_cooldown = 0.03;
@@ -546,12 +570,15 @@ void create_dialogue(const Uint8 *keystate, SDL_Renderer *render, Text *text, in
                         if (sound && sfx_timer >= sfx_cooldown) {
                             int speaker = text->on_frame[text->cur_str];
                             Mix_Chunk* chunk =  NULL;
-
+                            
                             if (speaker == MENEGHETTI || speaker == MENEGHETTI_ANGRY || speaker ==  MENEGHETTI_SAD) {
                                 chunk = sound[0];
                             }
                             if (speaker == PYTHON) {
                                 chunk = sound[1];
+                            }
+                            if (speaker == NONE) {
+                                chunk = sound[2];
                             }
 
                             if (chunk) {
@@ -680,66 +707,68 @@ void create_dialogue(const Uint8 *keystate, SDL_Renderer *render, Text *text, in
     }
 
     static int counters[] = {0, 0};
-    switch(text->on_frame[text->cur_str]) {
-        case MENEGHETTI:
-            if (!text->waiting_for_input) {
-                while (*anim_timer >= anim_cooldown) {
+    if (text->on_frame[text->cur_str] != NONE) {
+        switch(text->on_frame[text->cur_str]) {
+            case MENEGHETTI:
+                if (!text->waiting_for_input) {
+                    while (*anim_timer >= anim_cooldown) {
+                        
+                        counters[0] = (counters[0] + 1) % meneghetti_face[0].count;
+                        *anim_timer = 0.0;
+                    }
                     
-                    counters[0] = (counters[0] + 1) % meneghetti_face[0].count;
-                    *anim_timer = 0.0;
+                    SDL_RenderCopy(render, meneghetti_face[0].frames[counters[0] % meneghetti_face[0].count], NULL, &meneghetti_frame);
                 }
-                
-                SDL_RenderCopy(render, meneghetti_face[0].frames[counters[0] % meneghetti_face[0].count], NULL, &meneghetti_frame);
-            }
-            else {
-                counters[0] = 0;
-                SDL_RenderCopy(render, meneghetti_face[0].frames[0], NULL, &meneghetti_frame);
-            }
-            break;
-        case MENEGHETTI_ANGRY:
-            if (!text->waiting_for_input) {
-                while (*anim_timer >= anim_cooldown) {
+                else {
+                    counters[0] = 0;
+                    SDL_RenderCopy(render, meneghetti_face[0].frames[0], NULL, &meneghetti_frame);
+                }
+                break;
+            case MENEGHETTI_ANGRY:
+                if (!text->waiting_for_input) {
+                    while (*anim_timer >= anim_cooldown) {
+                        
+                        counters[0] = (counters[0] + 1) % meneghetti_face[1].count;
+                        *anim_timer = 0.0;
+                    }
                     
-                    counters[0] = (counters[0] + 1) % meneghetti_face[1].count;
-                    *anim_timer = 0.0;
+                    SDL_RenderCopy(render, meneghetti_face[1].frames[counters[0] % meneghetti_face[1].count], NULL, &meneghetti_frame);
                 }
-                
-                SDL_RenderCopy(render, meneghetti_face[1].frames[counters[0] % meneghetti_face[1].count], NULL, &meneghetti_frame);
-            }
-            else {
-                counters[0] = 0;
-                SDL_RenderCopy(render, meneghetti_face[1].frames[0], NULL, &meneghetti_frame);
-            }
-            break;
-        case MENEGHETTI_SAD:
-            if (!text->waiting_for_input) {
-                while (*anim_timer >= anim_cooldown) {
+                else {
+                    counters[0] = 0;
+                    SDL_RenderCopy(render, meneghetti_face[1].frames[0], NULL, &meneghetti_frame);
+                }
+                break;
+            case MENEGHETTI_SAD:
+                if (!text->waiting_for_input) {
+                    while (*anim_timer >= anim_cooldown) {
+                        
+                        counters[0] = (counters[0] + 1) % meneghetti_face[2].count;
+                        *anim_timer = 0.0;
+                    }
                     
-                    counters[0] = (counters[0] + 1) % meneghetti_face[2].count;
-                    *anim_timer = 0.0;
+                    SDL_RenderCopy(render, meneghetti_face[2].frames[counters[0] % meneghetti_face[2].count], NULL, &meneghetti_frame);
                 }
-                
-                SDL_RenderCopy(render, meneghetti_face[2].frames[counters[0] % meneghetti_face[2].count], NULL, &meneghetti_frame);
-            }
-            else {
-                counters[0] = 0;
-                SDL_RenderCopy(render, meneghetti_face[2].frames[0], NULL, &meneghetti_frame);
-            }
-            break;
-        case PYTHON:
-            if (!text->waiting_for_input) {
-                while (*anim_timer >= anim_cooldown) {
+                else {
+                    counters[0] = 0;
+                    SDL_RenderCopy(render, meneghetti_face[2].frames[0], NULL, &meneghetti_frame);
+                }
+                break;
+            case PYTHON:
+                if (!text->waiting_for_input) {
+                    while (*anim_timer >= anim_cooldown) {
+                        
+                        counters[0] = (counters[0] + 1) % python_face->count;
+                        *anim_timer = 0.0;
+                    }
                     
-                    counters[0] = (counters[0] + 1) % python_face->count;
-                    *anim_timer = 0.0;
+                    SDL_RenderCopy(render, python_face->frames[counters[0] % python_face->count], NULL, &python_frame);
                 }
-                
-                SDL_RenderCopy(render, python_face->frames[counters[0] % python_face->count], NULL, &python_frame);
-            }
-            else {
-                counters[0] = 0;
-                SDL_RenderCopy(render, python_face->frames[0], NULL, &python_frame);
-            }
+                else {
+                    counters[0] = 0;
+                    SDL_RenderCopy(render, python_face->frames[0], NULL, &python_frame);
+                }
+        }
     }
 
 }
