@@ -1,6 +1,6 @@
 <h1 align="center">C-Tale: Meneghetti VS Python</h1>
 <p align="center">
-  <img alt="Static Badge" src="https://img.shields.io/badge/In%20Progress-yellow?style=for-the-badge">
+  <img alt="Static Badge" src="https://img.shields.io/badge/COMPLETE-2ecc71?style=for-the-badge">
   <img alt="GitHub License" src="https://img.shields.io/github/license/danilocb21/projeto-rpg?style=for-the-badge&logo=github&color=purple">
   <img alt="Static Badge" src="https://img.shields.io/badge/Language-blue?style=for-the-badge&logo=c">
 </p>
@@ -22,15 +22,21 @@
 Project is: _in progress_.
 
 ## 🗺️ Roadmap
-- [ ] 🎨 Sprites
-- [ ] 🏃 Character movement
-- [ ] 💬 NPC interaction
-- [ ] ⚔️ Battle system
-- [ ] 🎒 Items
-- [ ] 🚩 Ending sequence
+- [x] 🎨 Sprites
+- [x] 🏃 Character movement
+- [x] 💬 NPC interaction
+- [x] ⚔️ Battle system
+- [x] 🎒 Items
+- [x] 🚩 Ending sequence
+## 💡 Future Goals
+- [ ] 🌍 Multiple scenarios
+- [ ] ⚔️ Different battles
+- [ ] 🚂 Different game modes
+- [ ] 🪙 Different endings
+- [ ] 👾 Debug mode
 
 ## 📸 Screenshots
-![PLACEHOLDER](./img/placeholder.png)
+![PLACEHOLDER]
 
 ## 💾 Setup
 - __Windows:__ For this program to work, you will need a C/C++ compiler. We recommend [_MinGW_](https://sourceforge.net/projects/mingw/), which is the one we used. Keep your eyes on the said architeture, 32-bits version is needed.
