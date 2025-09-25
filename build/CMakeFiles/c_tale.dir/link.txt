@@ -1,0 +1,3 @@
+C:\Libs\CMake\bin\cmake.exe -E rm -f CMakeFiles\c_tale.dir/objects.a
+C:\msys64\ucrt64\bin\ar.exe qc CMakeFiles\c_tale.dir/objects.a @CMakeFiles\c_tale.dir\objects1.rsp
+C:\msys64\ucrt64\bin\gcc.exe -g -Wl,--whole-archive CMakeFiles\c_tale.dir/objects.a -Wl,--no-whole-archive -o c_tale.exe -Wl,--out-implib,libc_tale.dll.a -Wl,--major-image-version,0,--minor-image-version,0 @CMakeFiles\c_tale.dir\linkLibs.rsp

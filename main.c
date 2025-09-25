@@ -67,6 +67,7 @@ typedef struct {
     AnimState anim_state;
     SDL_Rect collision;
     SDL_Texture* current;
+    int facing;
 } Prop;
 typedef struct {
     SDL_FRect collision;
@@ -125,7 +126,7 @@ int main(int argc, char* argv[]) {
     (void) argc;
     (void) argv;
 
-    int game_state = BATTLE_SCREEN; // Lembrar de deixar CUTSCENE aqui na versão final.
+    int game_state = OPEN_WORLD; // Lembrar de deixar CUTSCENE aqui na versão final.
     int battle_state = ON_MENU;
     FadeState open_world_fade = {0.0, 255, true};
     FadeState end_scene_fade = {0.0, 0, true};
@@ -208,6 +209,24 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    Animation mr_python_animation[DIR_COUNT];
+    mr_python_animation[UP].count = 2;
+    mr_python_animation[UP].frames = malloc(sizeof(SDL_Texture*) * mr_python_animation[UP].count);
+    mr_python_animation[UP].frames[0] = create_texture(game.renderer, "assets/sprites/characters/mr-python-back-1.png");
+    mr_python_animation[UP].frames[1] = create_texture(game.renderer, "assets/sprites/characters/mr-python-back-1.png");
+    mr_python_animation[DOWN].count = 2;
+    mr_python_animation[DOWN].frames = malloc(sizeof(SDL_Texture*) * mr_python_animation[DOWN].count);
+    mr_python_animation[DOWN].frames[0] = create_texture(game.renderer, "assets/sprites/characters/mr-python-front-1.png");
+    mr_python_animation[DOWN].frames[1] = create_texture(game.renderer, "assets/sprites/characters/mr-python-front-2.png");
+    mr_python_animation[LEFT].count = 2;
+    mr_python_animation[LEFT].frames = malloc(sizeof(SDL_Texture*) * mr_python_animation[LEFT].count);
+    mr_python_animation[LEFT].frames[0] = create_texture(game.renderer, "assets/sprites/characters/mr-python-left-1.png");
+    mr_python_animation[LEFT].frames[1] = create_texture(game.renderer, "assets/sprites/characters/mr-python-left-2.png");
+    mr_python_animation[RIGHT].count = 2;
+    mr_python_animation[RIGHT].frames = malloc(sizeof(SDL_Texture*) * mr_python_animation[RIGHT].count);
+    mr_python_animation[RIGHT].frames[0] = create_texture(game.renderer, "assets/sprites/characters/mr-python-right-1.png");
+    mr_python_animation[RIGHT].frames[1] = create_texture(game.renderer, "assets/sprites/characters/mr-python-right-2.png");
+
     Animation meneghetti_dialogue[3];
     meneghetti_dialogue[0].count = 2;
     meneghetti_dialogue[0].frames = malloc(sizeof(SDL_Texture*) * meneghetti_dialogue[0].count);
@@ -238,11 +257,6 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "Error loading animation sprite: %s", IMG_GetError());
         return 1;
     }
-
-    Animation mr_python_animation = {
-        .frames = (SDL_Texture*[]){create_texture(game.renderer, "assets/sprites/characters/mr-python.png"), create_texture(game.renderer, "assets/sprites/characters/mr-python-1.png")},
-        .count = 2
-    };
 
     TTF_Font* title_text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", 24);
     SDL_Color title_text_color = {101, 107, 117, 255};
@@ -410,7 +424,8 @@ int main(int argc, char* argv[]) {
     Prop mr_python = {
         .anim_state.counter = 0,
         .anim_state.timer = 0.0,
-        .current = mr_python_animation.frames[0]
+        .current = mr_python_animation[DOWN].frames[0],
+        .facing = DOWN
     };
 
     Prop python_van = {
@@ -1111,6 +1126,10 @@ int main(int argc, char* argv[]) {
     bool has_played_break = false;
     bool python_dead = false;
     int death_count = 0;
+
+    if (game_state == OPEN_WORLD) {
+        player_state = IDLE;
+    }
     
     while (running) {
         while (SDL_PollEvent(&event)) {
@@ -1363,7 +1382,7 @@ int main(int argc, char* argv[]) {
             SDL_RenderCopyEx(game.renderer, meneghetti_reflection.texture, NULL, &meneghetti_reflection.collision, 0, NULL, SDL_FLIP_VERTICAL);
             SDL_RenderCopy(game.renderer, scenario.texture, NULL, &scenario.collision);
 
-            mr_python.current = animate_sprite(&mr_python_animation, dt, 3.0, &mr_python.anim_state, true);
+            mr_python.current = animate_sprite(&mr_python_animation[mr_python.facing], dt, 3.0, &mr_python.anim_state, true);
             lake.current = animate_sprite(&lake_animation, dt, 0.5, &lake.anim_state, false);
             ocean.current = animate_sprite(&ocean_animation, dt, 0.7, &ocean.anim_state, false);
             sky.current = animate_sprite(&sky_animation, dt, 0.8, &sky.anim_state, false);
@@ -1426,6 +1445,22 @@ int main(int argc, char* argv[]) {
                             break;
                         default:
                             create_dialogue(&meneghetti, game.renderer, &py_dialogue_ad_4, &player_state, &game_state, dt, meneghetti_dialogue, &python_dialogue, &anim_timer, dialogue_voices, false);
+                            break;
+                    }
+                    switch (meneghetti.facing) {
+                        case UP:
+                            mr_python.facing = DOWN;
+                            break;
+                        case DOWN:
+                            mr_python.facing = UP;
+                            break;
+                        case LEFT:
+                            mr_python.facing = RIGHT;
+                            break;
+                        case RIGHT:
+                            mr_python.facing = LEFT;
+                            break;
+                        default:
                             break;
                     }
                     python_dialogue_finished = true;
@@ -2136,13 +2171,23 @@ int main(int argc, char* argv[]) {
 
                 if (battle_state == ON_ITEM) {
                     if (player_state == IDLE) {
-                        battle_state = ON_MENU;
-                        player_state = IN_BATTLE;
                         on_dialogue = false;
-                        has_played_eat = false;
                         counter = 0.0;
                         menu_pos = 0;
                         if (food_amount > 0) food_amount--;
+
+                        if (has_played_eat) {
+                            turn = SOUL_TURN;
+                            battle_state = ON_FIGHT;
+                            player_state = IN_BATTLE;
+                        }
+                        else {
+                            turn = CHOICE_TURN;
+                            battle_state = ON_MENU;
+                            player_state = IN_BATTLE;
+                        }
+
+                        has_played_eat = false;
                     }
                     else {
                         if (!on_dialogue && food_amount > 0) {
@@ -3555,7 +3600,7 @@ void python_attacks(SDL_Renderer *render, Prop *soul, SDL_Rect battle_box, int *
 
                 for (int i = 0; i < 15; i++) {
                     if (created_object[i]) {
-                        active_objects[i].collision.y += (int)(objects_speed[i] * dt);
+                        active_objects[i].collision.y += objects_speed[i] * dt;
 
                         if ((active_objects[i].collision.y + active_objects[i].collision.h) >= (battle_box.y + battle_box.h)) {
                             Mix_PlayChannel(-1, slam_sound, 0);
@@ -3633,7 +3678,7 @@ void python_attacks(SDL_Renderer *render, Prop *soul, SDL_Rect battle_box, int *
 
                 for (int i = 0; i < 6; i++) {
                     if (created_object[i]) {
-                        active_objects[i].collision.x += (int)(objects_speed[i] * dt);
+                        active_objects[i].collision.x += objects_speed[i] * dt;
 
                         if (i % 2 == 0) {
                             if (created_object[i] && created_object[i + 1]) {
