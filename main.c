@@ -315,7 +315,7 @@ int main(int argc, char* argv[]) {
         .keystate = SDL_GetKeyboardState(NULL),
         .interact_collision = {(SCREEN_WIDTH / 2) - 10, (SCREEN_HEIGHT / 2) + 16, 19, 25},
         .health = 20,
-        .strength = 20,
+        .strength = 10,
         .facing = DOWN,
         .counters = {0, 0, 0, 0}
     };
@@ -1116,9 +1116,6 @@ int main(int argc, char* argv[]) {
             case SDL_KEYDOWN:
                 switch (event.key.keysym.scancode)
                 {
-                case SDL_SCANCODE_ESCAPE:
-                    running = SDL_FALSE;
-                    break;
                 case SDL_SCANCODE_E:
                     if (player_state == MOVABLE)
                         interaction_request = true;
@@ -1126,7 +1123,6 @@ int main(int argc, char* argv[]) {
                 default:
                     break;
                 }
-
             default:
                 break;
             }
@@ -1715,7 +1711,7 @@ int main(int argc, char* argv[]) {
                                 damage.collision.y = py_life.y - 20;
                                 
                                 if (rects_intersect(&bar_attack.collision, &perfect_hit_rect)) {
-                                    attack_damage = meneghetti.strength * 2;
+                                    attack_damage = meneghetti.strength * 3;
                                     damage.current = damage_numbers[3];
                                     SDL_QueryTexture(damage.current, NULL, NULL, &w, &h);
                                     damage.collision.w = w;
@@ -2396,6 +2392,7 @@ int main(int argc, char* argv[]) {
                 scenario.collision = (SDL_Rect){0, -SCREEN_HEIGHT, SCREEN_WIDTH * 2, SCREEN_HEIGHT * 2};
                 meneghetti.collision = (SDL_Rect){(SCREEN_WIDTH / 2) - 10, (SCREEN_HEIGHT / 2) - 16, 19, 32};
                 meneghetti.interact_collision = (SDL_Rect){(SCREEN_WIDTH / 2) - 10, (SCREEN_HEIGHT / 2) + 16, 19, 25};
+                meneghetti_civic.collision = (SDL_Rect){scenario.collision.x + scenario.collision.w, scenario.collision.y + 731, 64, 42};
                 
                 delay_started = false;
                 car_animation_timer = 0.0;
@@ -2437,6 +2434,7 @@ int main(int argc, char* argv[]) {
                 open_world_fade.timer = 0.0;
                 death_counter = 0.0;
 
+                has_played_break = false;
                 meneghetti_arrived = false;
                 player_state = IDLE;
                 game_state = TITLE_SCREEN;
@@ -2444,6 +2442,7 @@ int main(int argc, char* argv[]) {
                 scenario.collision = (SDL_Rect){0, -SCREEN_HEIGHT, SCREEN_WIDTH * 2, SCREEN_HEIGHT * 2};
                 meneghetti.collision = (SDL_Rect){(SCREEN_WIDTH / 2) - 10, (SCREEN_HEIGHT / 2) - 16, 19, 32};
                 meneghetti.interact_collision = (SDL_Rect){(SCREEN_WIDTH / 2) - 10, (SCREEN_HEIGHT / 2) + 16, 19, 25};
+                meneghetti_civic.collision = (SDL_Rect){scenario.collision.x + scenario.collision.w, scenario.collision.y + 731, 64, 42};
                 
                 delay_started = false;
                 car_animation_timer = 0.0;
@@ -3663,10 +3662,10 @@ void python_attacks(SDL_Renderer *render, Prop *soul, SDL_Rect battle_box, int *
                             active_objects[i].collision.x = (props[2][0].collision.x + (props[2][0].collision.w / 2)) - (active_objects[i].collision.w / 2);
                             active_objects[i].collision.y = (props[2][0].collision.y + (props[2][0].collision.h / 2)) - (active_objects[i].collision.h / 2);
 
-                            int target_x = soul->collision.x + soul->collision.w / 2;
-                            int target_y = soul->collision.y + soul->collision.h / 2;
-                            int start_x = active_objects[i].collision.x + active_objects[i].collision.w / 2;
-                            int start_y = active_objects[i].collision.y + active_objects[i].collision.h / 2;
+                            int target_x = soul->collision.x + (soul->collision.w / 2);
+                            int target_y = soul->collision.y + (soul->collision.h / 2);
+                            int start_x = active_objects[i].collision.x + (active_objects[i].collision.w / 2);
+                            int start_y = active_objects[i].collision.y + (active_objects[i].collision.h / 2);
 
                             double angle_rad = atan2(target_y - start_y, target_x - start_x);
                             objects_speed[i] = 130;
