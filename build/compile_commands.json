@@ -1,0 +1,8 @@
+[
+{
+  "directory": "C:/Users/willi/OneDrive/Documentos/CTale/projeto-rpg/build",
+  "command": "C:\\msys64\\ucrt64\\bin\\gcc.exe  @CMakeFiles/c_tale.dir/includes_C.rsp -g -std=gnu11 -Wall -Wextra -Wpedantic -o CMakeFiles\\c_tale.dir\\main.c.obj -c C:\\Users\\willi\\OneDrive\\Documentos\\CTale\\projeto-rpg\\main.c",
+  "file": "C:/Users/willi/OneDrive/Documentos/CTale/projeto-rpg/main.c",
+  "output": "CMakeFiles/c_tale.dir/main.c.obj"
+}
+]
