@@ -4,6 +4,8 @@
 #include <stdbool.h>
 #include <math.h>
 #include <string.h>
+#include <time.h>
+#include <stdarg.h>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_ttf.h>
@@ -82,11 +84,11 @@ typedef struct {
 } FadeState;
 
 enum direction { UP, DOWN, LEFT, RIGHT };
-enum game_states { TITLE_SCREEN, CUTSCENE, OPEN_WORLD, BATTLE_SCREEN };
+enum game_states { TITLE_SCREEN, CUTSCENE, OPEN_WORLD, BATTLE_SCREEN, DEATH_SCREEN, FINAL_SCREEN };
 enum player_states { IDLE, MOVABLE, DIALOGUE, PAUSE, DEAD, IN_BATTLE };
-enum characters { MENEGHETTI, MENEGHETTI_ANGRY, MENEGHETTI_SAD, PYTHON, NONE};
+enum characters { MENEGHETTI, MENEGHETTI_ANGRY, MENEGHETTI_SAD, PYTHON, NONE };
 enum battle_buttons { FIGHT, ACT, ITEM, LEAVE };
-enum battle_states { ON_MENU, ON_FIGHT, ON_ACT, ON_ITEM, ON_LEAVE};
+enum battle_states { ON_MENU, ON_FIGHT, ON_ACT, ON_ITEM, ON_LEAVE };
 enum battle_turns { CHOICE_TURN, ATTACK_TURN, SOUL_TURN, ACT_TURN };
 
 bool sdl_initialize(Game *game);
@@ -96,7 +98,7 @@ void game_cleanup(Game *game, int exit_status);
 SDL_Texture *create_texture(SDL_Renderer *render, const char *dir);
 SDL_Texture *create_txt(SDL_Renderer *render, const char *utf8_char, TTF_Font *font, SDL_Color color);
 SDL_Texture *animate_sprite(Animation *anim, double dt, double cooldown, AnimState *state, bool blink);
-void create_dialogue(Character *player, SDL_Renderer *render, Text *text, int *player_state, int *game_state, double dt, Animation *meneghetti_face, Animation *python_face, double *anim_timer, Mix_Chunk **sound);
+void create_dialogue(Character *player, SDL_Renderer *render, Text *text, int *player_state, int *game_state, double dt, Animation *meneghetti_face, Animation *python_face, double *anim_timer, Mix_Chunk **sound, bool bubble);
 void reset_dialogue(Text *text);
 void sprite_update(Character *scenario, Character *player, Animation *animation, double dt, SDL_Rect boxes[], SDL_Rect surfaces[], double *anim_timer, double anim_interval, Mix_Chunk **sound);
 bool rects_intersect(SDL_Rect *a, SDL_Rect *b);
@@ -105,22 +107,28 @@ static int surface_to_sound_index(int surface_index);
 static int detect_surface(SDL_Rect *player, SDL_Rect surfaces[], int surface_count);
 int renderitem_cmp(const void *pa, const void *pb);
 void update_reflection(Character *original, Character* reflection, Animation *animation);
+void organize_items(Prop *text_items);
+int randint(int min, int max);
+int choice(int count, ...);
+void python_attacks(SDL_Renderer *render, Prop *soul, SDL_Rect battle_box, int *player_health, int damage, int attack_index, bool *ivulnerable, Prop **props, double dt, double turn_timer, bool clear);
 
 static int utf8_charlen(const char *s);
 static int utf8_copy_char(const char *s, char *out);
 
 int main(int argc, char* argv[]) {
+    srand(time(NULL));
+    
     (void) argc;
     (void) argv;
 
-    int game_state = BATTLE_SCREEN; // Lembrar de deixar CUTSCENE aqui na versão final.
+    int game_state = CUTSCENE; // Lembrar de deixar CUTSCENE aqui na versão final.
     int battle_state = ON_MENU;
-    static FadeState open_world_fade = {0.0, 255, true};
+    FadeState open_world_fade = {0.0, 255, true};
+    FadeState end_scene_fade = {0.0, 0, true};
 
-    static double arrival_timer = 0.0;
-    static double car_animation_timer = 0.0;
-    static bool delay_started = false;
-    static bool first_dialogue = false;
+    double arrival_timer = 0.0;
+    double car_animation_timer = 0.0;
+    bool delay_started = false;
     float parallax_factor = 0.5f;
 
     int player_state = MOVABLE;
@@ -289,6 +297,15 @@ int main(int argc, char* argv[]) {
         .count = 2
     };
 
+    Animation python_mother_animation = {
+        .frames = (SDL_Texture*[]){create_texture(game.renderer, "assets/sprites/battle/python-1.png"), create_texture(game.renderer, "assets/sprites/battle/python-2.png")},
+        .count = 2
+    };
+
+    Animation python_baby_animation = {
+        .frames = (SDL_Texture*[]){create_texture(game.renderer, "assets/sprites/battle/python-baby-1.png"), create_texture(game.renderer, "assets/sprites/battle/python-baby-2.png")},
+        .count = 2
+    };
 
     // OBJETOS:
     Character meneghetti = {
@@ -325,7 +342,6 @@ int main(int argc, char* argv[]) {
         .texture = python_head_animation.frames[0],
         .collision = {(SCREEN_WIDTH / 2) - 102, 25, 204, 204},
         .health = 200,
-        .strength = 2
     };
 
     Character meneghetti_reflection = {
@@ -382,6 +398,10 @@ int main(int argc, char* argv[]) {
     if (game_state == BATTLE_SCREEN) {
         soul.collision = (SDL_Rect){(SCREEN_WIDTH / 2) - 10, (SCREEN_HEIGHT / 2) - 10, 20, 20};
     }
+
+    Prop soul_shattered = {
+        .current = create_texture(game.renderer, "assets/sprites/battle/soul-broken.png")
+    };
 
     Prop mr_python = {
         .anim_state.counter = 0,
@@ -490,17 +510,23 @@ int main(int argc, char* argv[]) {
     SDL_QueryTexture(battle_hp_amount.current, NULL, NULL, &battle_text_width, &battle_text_height);
     battle_hp_amount.collision = (SDL_Rect){button_act.collision.x + 140, button_fight.collision.y - battle_text_height - 8, battle_text_width, battle_text_height};
 
+    Prop food_amount_text = {
+        .current = create_txt(game.renderer, "4x", battle_text_font, battle_text_color),
+    };
+    SDL_QueryTexture(food_amount_text.current, NULL, NULL, &battle_text_width, &battle_text_height);
+    food_amount_text.collision = (SDL_Rect){0, 0, battle_text_width, battle_text_height};
+
     Prop text_attack_act = {
         .current = create_txt(game.renderer, "* Mr. Python", title_text_font, battle_text_color),
     };
     SDL_QueryTexture(text_attack_act.current, NULL, NULL, &battle_text_width, &battle_text_height);
     text_attack_act.collision = (SDL_Rect){69, (SCREEN_HEIGHT / 2) + 25, battle_text_width, battle_text_height};
 
-    Prop text_fight_generic = {
-        .current = create_txt(game.renderer, "* Mr. Python aguarda o seu próximo movimento.", title_text_font, battle_text_color),
+    Prop text_item = {
+        .current = create_txt(game.renderer, "* Picanha", title_text_font, battle_text_color)
     };
-    SDL_QueryTexture(text_fight_generic.current, NULL, NULL, &battle_text_width, &battle_text_height);
-    text_fight_generic.collision = (SDL_Rect){47, (SCREEN_HEIGHT / 2) + 27, battle_text_width, battle_text_height};
+    SDL_QueryTexture(text_item.current, NULL, NULL, &battle_text_width, &battle_text_height);
+    text_item.collision = (SDL_Rect){69, (SCREEN_HEIGHT / 2) + 25, battle_text_width, battle_text_height};
 
     Prop text_act[3];
     text_act[0].current = create_txt(game.renderer, "* Examinar", title_text_font, battle_text_color);
@@ -512,20 +538,6 @@ int main(int argc, char* argv[]) {
     text_act[2].current = create_txt(game.renderer, "* Explicar", title_text_font, battle_text_color);
     SDL_QueryTexture(text_act[2].current, NULL, NULL, &battle_text_width, &battle_text_height);
     text_act[2].collision = (SDL_Rect){text_act[0].collision.x + text_act[0].collision.w + 100, text_act[0].collision.y, battle_text_width, battle_text_height};
-
-    Prop text_items[4];
-    text_items[0].current = create_txt(game.renderer, "* Picanha", title_text_font, battle_text_color);
-    SDL_QueryTexture(text_items[0].current, NULL, NULL, &battle_text_width, &battle_text_height);
-    text_items[0].collision = (SDL_Rect){69, (SCREEN_HEIGHT / 2) + 25, battle_text_width, battle_text_height};
-    text_items[1].current = create_txt(game.renderer, "* Cuscuz", title_text_font, battle_text_color);
-    SDL_QueryTexture(text_items[1].current, NULL, NULL, &battle_text_width, &battle_text_height);
-    text_items[1].collision = (SDL_Rect){text_items[0].collision.x, text_items[0].collision.y + text_items[0].collision.h + 10, battle_text_width, battle_text_height};
-    text_items[2].current = create_txt(game.renderer, "* Café", title_text_font, battle_text_color);
-    SDL_QueryTexture(text_items[2].current, NULL, NULL, &battle_text_width, &battle_text_height);
-    text_items[2].collision = (SDL_Rect){text_items[0].collision.x + text_items[0].collision.w + 100, text_items[0].collision.y, battle_text_width, battle_text_height};
-    text_items[3].current = create_txt(game.renderer, "* Pão com ovo", title_text_font, battle_text_color);
-    SDL_QueryTexture(text_items[3].current, NULL, NULL, &battle_text_width, &battle_text_height);
-    text_items[3].collision = (SDL_Rect){text_items[2].collision.x, text_items[2].collision.y + text_items[2].collision.h + 10, battle_text_width, battle_text_height};
 
     Prop text_leave[2];
     text_leave[0].current = create_txt(game.renderer, "* Poupar", title_text_font, battle_text_color);
@@ -546,11 +558,69 @@ int main(int argc, char* argv[]) {
         .collision = {bar_target.collision.x + 20, bar_target.collision.y + 2, 14, bar_target.collision.h - 4}
     };
 
+    int attack_widths, attack_heights;
+    Prop command_rain[6];
+    command_rain[0].current = create_texture(game.renderer, "assets/sprites/battle/if.png");
+    SDL_QueryTexture(command_rain[0].current, NULL, NULL, &attack_widths, &attack_heights);
+    command_rain[0].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+    command_rain[1].current = create_texture(game.renderer, "assets/sprites/battle/else.png");
+    SDL_QueryTexture(command_rain[1].current, NULL, NULL, &attack_widths, &attack_heights);
+    command_rain[1].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+    command_rain[2].current = create_texture(game.renderer, "assets/sprites/battle/elif.png");
+    SDL_QueryTexture(command_rain[2].current, NULL, NULL, &attack_widths, &attack_heights);
+    command_rain[2].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+    command_rain[3].current = create_texture(game.renderer, "assets/sprites/battle/input.png");
+    SDL_QueryTexture(command_rain[3].current, NULL, NULL, &attack_widths, &attack_heights);
+    command_rain[3].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+    command_rain[4].current = create_texture(game.renderer, "assets/sprites/battle/print.png");
+    SDL_QueryTexture(command_rain[4].current, NULL, NULL, &attack_widths, &attack_heights);
+    command_rain[4].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+    command_rain[5].current = create_texture(game.renderer, "assets/sprites/battle/in.png");
+    SDL_QueryTexture(command_rain[5].current, NULL, NULL, &attack_widths, &attack_heights);
+    command_rain[5].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+
+    Prop parenthesis_enclosure[6];
+    parenthesis_enclosure[0].current = create_texture(game.renderer, "assets/sprites/battle/brackets-1.png");
+    SDL_QueryTexture(parenthesis_enclosure[0].current, NULL, NULL, &attack_widths, &attack_heights);
+    parenthesis_enclosure[0].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+    parenthesis_enclosure[1].current = create_texture(game.renderer, "assets/sprites/battle/brackets-2.png");
+    SDL_QueryTexture(parenthesis_enclosure[1].current, NULL, NULL, &attack_widths, &attack_heights);
+    parenthesis_enclosure[1].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+    parenthesis_enclosure[2].current = create_texture(game.renderer, "assets/sprites/battle/key-1.png");
+    SDL_QueryTexture(parenthesis_enclosure[2].current, NULL, NULL, &attack_widths, &attack_heights);
+    parenthesis_enclosure[2].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+    parenthesis_enclosure[3].current = create_texture(game.renderer, "assets/sprites/battle/key-2.png");
+    SDL_QueryTexture(parenthesis_enclosure[3].current, NULL, NULL, &attack_widths, &attack_heights);
+    parenthesis_enclosure[3].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+    parenthesis_enclosure[4].current = create_texture(game.renderer, "assets/sprites/battle/parenthesis-1.png");
+    SDL_QueryTexture(parenthesis_enclosure[4].current, NULL, NULL, &attack_widths, &attack_heights);
+    parenthesis_enclosure[4].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+    parenthesis_enclosure[5].current = create_texture(game.renderer, "assets/sprites/battle/parenthesis-2.png");
+    SDL_QueryTexture(parenthesis_enclosure[5].current, NULL, NULL, &attack_widths, &attack_heights);
+    parenthesis_enclosure[5].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+
+    Prop python_mother[4];
+    python_mother[0].current = python_mother_animation.frames[0];
+    SDL_QueryTexture(python_mother[0].current, NULL, NULL, &attack_widths, &attack_heights);
+    python_mother[0].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+    python_mother[1].current = python_mother_animation.frames[1];
+    SDL_QueryTexture(python_mother[1].current, NULL, NULL, &attack_widths, &attack_heights);
+    python_mother[1].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+    python_mother[2].current = python_baby_animation.frames[0];
+    SDL_QueryTexture(python_mother[2].current, NULL, NULL, &attack_widths, &attack_heights);
+    python_mother[2].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+    python_mother[3].current = python_baby_animation.frames[1];
+    SDL_QueryTexture(python_mother[3].current, NULL, NULL, &attack_widths, &attack_heights);
+    python_mother[3].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+
+    Prop *python_props[] = {command_rain, parenthesis_enclosure, python_mother};
+
     SDL_Texture* damage_numbers[] = {create_texture(game.renderer, "assets/sprites/battle/number-10.png"), create_texture(game.renderer, "assets/sprites/battle/number-20.png"), create_texture(game.renderer, "assets/sprites/battle/number-30.png"), create_texture(game.renderer, "assets/sprites/battle/number-40.png")};
     Prop damage;
 
     // SONS:
     Mix_Chunk* cutscene_music = Mix_LoadWAV("assets/sounds/soundtracks/the_story_of_a_hero.wav");
+    Mix_Chunk* battle_music = Mix_LoadWAV("assets/sounds/soundtracks/battle_against_abstraction.wav");
 
     Mix_Chunk* ambience = Mix_LoadWAV("assets/sounds/sound_effects/in-game/ambient_sound.wav");
     if (!ambience) {
@@ -589,10 +659,12 @@ int main(int argc, char* argv[]) {
     Mix_Chunk* enemy_hit_sound = Mix_LoadWAV("assets/sounds/sound_effects/battle-sounds/enemy_hit.wav");
     Mix_Chunk* eat_sound = Mix_LoadWAV("assets/sounds/sound_effects/battle-sounds/heal_sound.wav");
 
+    Mix_Chunk* soul_break_sound = Mix_LoadWAV("assets/sounds/sound_effects/battle-sounds/soul_shatter.wav");
+
     // BASES DE TEXTO:
     Text py_dialogue = {
-        .writings = {"* Python, hoje você vai ter um dia ruim.", "* A linguagem C prevalecerá!", "* O mundo não quer mais saber de C, Java, toda essa porcaria.", "* O mundo está em alto nível agora. A tecnologia existe com tal objetivo desde sempre.", "* Por enquanto. O conhecimento deve se manter ativo, sem passividades de abstração."},
-        .on_frame = {MENEGHETTI_ANGRY, MENEGHETTI_ANGRY, PYTHON, PYTHON, MENEGHETTI},
+        .writings = {"* Há quanto tempo, Meneghetti.", "* Mr. Python...", "* Você veio até aqui batalhar contra mim?", "* Lembra o que aconteceu da última vez, não é?", "* Você e as outras linguagens de baixo nível nem me arranharam. Foi realmente estúpido.", "* Não vou cometer os mesmos erros do passado...", "* Você vai pagar pelo que fez com eles.", "* As linguagens de baixo nível ainda não morreram.", "* Eu ainda estou aqui para acabar com você.", "* Que peninha... Deve ser tão triste ser o último que restou.", "* Eu entendo a sua frustração.", "* Vamos acabar com isso para que você se junte a eles logo.", "* Venha, Mr. Python."},
+        .on_frame = {PYTHON, MENEGHETTI, PYTHON, PYTHON, PYTHON, MENEGHETTI_SAD, MENEGHETTI_ANGRY, MENEGHETTI, MENEGHETTI_ANGRY, PYTHON, PYTHON, PYTHON, MENEGHETTI_ANGRY},
         .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", DIALOGUE_FONT_SIZE),
         .text_color = {255, 255, 255, 255},
         .char_count = 0,
@@ -607,9 +679,77 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    Text py_dialogue_ad = {
+        .writings = {"* Hm? Você conseguiu voltar?", "* Você é realmente duro na queda, Meneghetti. Devo admitir.", "* Eu ainda não desisti. Não pense que vai ser fácil.", "* Vamos ver se você vai ter a mesma sorte desta vez."},
+        .on_frame = {PYTHON, PYTHON, MENEGHETTI_ANGRY, PYTHON},
+        .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", DIALOGUE_FONT_SIZE),
+        .text_color = {255, 255, 255, 255},
+        .char_count = 0,
+        .text_box = {0, 0, 0, 0},
+        .cur_str = 0,
+        .cur_byte = 0,
+        .timer = 0.0,
+        .waiting_for_input = false
+    };
+    if (!py_dialogue_ad.text_font) {
+        fprintf(stderr, "Error loading font: %s", TTF_GetError());
+        return 1;
+    }
+
+    Text py_dialogue_ad_2 = {
+        .writings = {"* Que insistência. Por que não desiste logo?", "* Não enquanto eu não acabar com você.", "* Hahahah. Não precisa ser tão agressivo."},
+        .on_frame = {PYTHON, MENEGHETTI_ANGRY, PYTHON},
+        .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", DIALOGUE_FONT_SIZE),
+        .text_color = {255, 255, 255, 255},
+        .char_count = 0,
+        .text_box = {0, 0, 0, 0},
+        .cur_str = 0,
+        .cur_byte = 0,
+        .timer = 0.0,
+        .waiting_for_input = false
+    };
+    if (!py_dialogue_ad_2.text_font) {
+        fprintf(stderr, "Error loading font: %s", TTF_GetError());
+        return 1;
+    }
+
+    Text py_dialogue_ad_3 = {
+        .writings = {"* Acho que tá um pouco difícil para você. Quer que eu diminua a dificuldade?", "* Cala a boca.", "* Desculpa, pessoal, eu tentei. Vamos para mais um round então."},
+        .on_frame = {PYTHON, MENEGHETTI, PYTHON},
+        .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", DIALOGUE_FONT_SIZE),
+        .text_color = {255, 255, 255, 255},
+        .char_count = 0,
+        .text_box = {0, 0, 0, 0},
+        .cur_str = 0,
+        .cur_byte = 0,
+        .timer = 0.0,
+        .waiting_for_input = false
+    };
+    if (!py_dialogue_ad_3.text_font) {
+        fprintf(stderr, "Error loading font: %s", TTF_GetError());
+        return 1;
+    }
+
+    Text py_dialogue_ad_4 = {
+        .writings = {"* ...", "* Vamos logo com isso."},
+        .on_frame = {MENEGHETTI, PYTHON},
+        .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", DIALOGUE_FONT_SIZE),
+        .text_color = {255, 255, 255, 255},
+        .char_count = 0,
+        .text_box = {0, 0, 0, 0},
+        .cur_str = 0,
+        .cur_byte = 0,
+        .timer = 0.0,
+        .waiting_for_input = false
+    };
+    if (!py_dialogue_ad_4.text_font) {
+        fprintf(stderr, "Error loading font: %s", TTF_GetError());
+        return 1;
+    }
+
     Text van_dialogue = {
-        .writings = {"* Uma van com a logo do satanás estampada nela.", "* Então eu vim ao lugar correto, é aqui que o meu nêmesis está hospedado...", "* Saudades dos velhos tempos de linguagem de baixo nível."},
-        .on_frame = {MENEGHETTI, MENEGHETTI_ANGRY, MENEGHETTI_SAD},
+        .writings = {"* Então este é o Python-móvel...", "* Agora tenho certeza de que meu inimigo está aqui..."},
+        .on_frame = {MENEGHETTI, MENEGHETTI_ANGRY},
         .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", DIALOGUE_FONT_SIZE),
         .text_color = {255, 255, 255, 255},
         .char_count = 0,
@@ -625,7 +765,7 @@ int main(int argc, char* argv[]) {
     }
 
     Text lake_dialogue = {
-        .writings = {"* O lago sem animação te faz pensar sobre os esforços do criador deste universo.", "* Isso te enche de determinação.", "* Isso me enche de vontade de pescar."},
+        .writings = {"* O lago com animação te faz pensar sobre os esforços do criador deste universo.", "* Isso te enche de determinação.", "* Se fosse programado em Python não daria pra fazer isso."},
         .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", DIALOGUE_FONT_SIZE),
         .on_frame = {NONE, NONE, MENEGHETTI},
         .text_color = {255, 255, 255, 255},
@@ -638,9 +778,22 @@ int main(int argc, char* argv[]) {
     };
 
     Text arrival_dialogue = {
-        .writings = {"* Aqui estou, na última localização registrada do demônio do século.", "* Hora de acabar com isso de uma vez por todas."},
+        .writings = {"* Meu radar-C detectou locomoções de alto nível por esta área.", "* Hora de acabar com isso de uma vez por todas."},
         .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", DIALOGUE_FONT_SIZE),
         .on_frame = {MENEGHETTI, MENEGHETTI},
+        .text_color = {255, 255, 255, 255},
+        .char_count = 0,
+        .text_box = {0, 0, 0, 0},
+        .cur_str = 0,
+        .cur_byte = 0,
+        .timer = 0.0,
+        .waiting_for_input = false
+    };
+
+    Text end_dialogue = {
+        .writings = {"* Como... Como que isso foi acontecer?", "* Não faz sentido... Nós tínhamos ganhado essa luta.", "* EU já havia ganhado.", "* ...", "* Esse não é o fim, Meneghetti.", "* Por agora, você venceu. Mas um dia...", "* Um dia, as linguagens de baixo nível serão esquecidas.", "* E esse será o dia de sua ruína, e do meu triunfo.", "* Após anos de reinado das linguagens de alto nível...", "* A luz que um dia havia sumido dos programadores finalmente voltou a brilhar.", "* Um raio de esperança e um futuro próspero agora poderiam ser contemplados.", "* Tudo isso graças à ele..."},
+        .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", DIALOGUE_FONT_SIZE),
+        .on_frame = {PYTHON, PYTHON, PYTHON, PYTHON, PYTHON, PYTHON, PYTHON, PYTHON, NONE, NONE, NONE, NONE},
         .text_color = {255, 255, 255, 255},
         .char_count = 0,
         .text_box = {0, 0, 0, 0},
@@ -662,7 +815,6 @@ int main(int argc, char* argv[]) {
         .timer = 0.0,
         .waiting_for_input = false
     };
-
     
     Text cutscene_2 = {
         .writings = {"Porém, com os avanços tecnológicos, surgiu dependência e abstração na vida dos programadores."},
@@ -716,6 +868,19 @@ int main(int argc, char* argv[]) {
         .waiting_for_input = false
     };
 
+    Text fight_generic_txt = {
+        .writings = {"* Mr. Python aguarda o seu próximo movimento."},
+        .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", DIALOGUE_FONT_SIZE),
+        .on_frame = {NONE},
+        .text_color = {255, 255, 255, 255},
+        .char_count = 0,
+        .text_box = {0, 0, 0, 0},
+        .cur_str = 0,
+        .cur_byte = 0,
+        .timer = 0.0,
+        .waiting_for_input = false
+    };
+
     Text fight_leave_txt = {
         .writings = {"* Esta é uma batalha em que você não cogita fugir."},
         .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", DIALOGUE_FONT_SIZE),
@@ -730,7 +895,7 @@ int main(int argc, char* argv[]) {
     };
 
     Text fight_spare_txt = {
-        .writings = {"* A palavra 'perdão' não existe no seu dicionário."},
+        .writings = {"* A palavra 'perdão' não existe no seu vocabulário neste momento."},
         .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", DIALOGUE_FONT_SIZE),
         .on_frame = {NONE},
         .text_color = {255, 255, 255, 255},
@@ -741,7 +906,6 @@ int main(int argc, char* argv[]) {
         .timer = 0.0,
         .waiting_for_input = false
     };
-
 
     Text fight_act_txt = {
         .writings = {"* Mr. Python - 2 ATQ, ? DEF |* O seu pior inimigo."},
@@ -769,8 +933,34 @@ int main(int argc, char* argv[]) {
         .waiting_for_input = false
     };
 
+    Text insult_generic_txt = {
+        .writings = {"* Você lembra do último turno... |* Você decide ficar calado."},
+        .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", DIALOGUE_FONT_SIZE),
+        .on_frame = {NONE},
+        .text_color = {255, 255, 255, 255},
+        .char_count = 0,
+        .text_box = {0, 0, 0, 0},
+        .cur_str = 0,
+        .cur_byte = 0,
+        .timer = 0.0,
+        .waiting_for_input = false
+    };
+
     Text explain_txt = {
         .writings = {"* Você explica ponteiros para Mr. Python. |* Ele enfraquece ao ouvir algo tão rudimentar."},
+        .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", DIALOGUE_FONT_SIZE),
+        .on_frame = {NONE},
+        .text_color = {255, 255, 255, 255},
+        .char_count = 0,
+        .text_box = {0, 0, 0, 0},
+        .cur_str = 0,
+        .cur_byte = 0,
+        .timer = 0.0,
+        .waiting_for_input = false
+    };
+
+    Text explain_generic_txt = {
+        .writings = {"* Você tenta explicar algo de baixo nível, mas Mr. Python dá de costas. |* Que rude!"},
         .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", DIALOGUE_FONT_SIZE),
         .on_frame = {NONE},
         .text_color = {255, 255, 255, 255},
@@ -795,8 +985,8 @@ int main(int argc, char* argv[]) {
         .waiting_for_input = false
     };
 
-    Text cuscuz_txt = {
-        .writings = {"* Você comeu CUSCUZ. |* Você recuperou 15 de HP!"},
+    Text no_food_txt = {
+        .writings = {"* Não sobrou mais nada comestível em seus bolsos."},
         .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", DIALOGUE_FONT_SIZE),
         .on_frame = {NONE},
         .text_color = {255, 255, 255, 255},
@@ -808,11 +998,11 @@ int main(int argc, char* argv[]) {
         .waiting_for_input = false
     };
 
-    Text cafe_txt = {
-        .writings = {"* Você tomou CAFÉ. |* Você recuperou 5 de HP!"},
-        .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", DIALOGUE_FONT_SIZE),
+    Text bubble_speech_1 = {
+        .writings = {"A abstração já venceu há muito tempo."},
+        .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", 14),
         .on_frame = {NONE},
-        .text_color = {255, 255, 255, 255},
+        .text_color = {0, 0, 0, 255},
         .char_count = 0,
         .text_box = {0, 0, 0, 0},
         .cur_str = 0,
@@ -821,11 +1011,24 @@ int main(int argc, char* argv[]) {
         .waiting_for_input = false
     };
 
-    Text pao_txt = {
-        .writings = {"* Você comeu PÃO COM OVO. |* Você recuperou 10 de HP!"},
-        .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", DIALOGUE_FONT_SIZE),
+    Text bubble_speech_2 = {
+        .writings = {"As linguagens de baixo nível já estão ultrapassadas."},
+        .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", 14),
         .on_frame = {NONE},
-        .text_color = {255, 255, 255, 255},
+        .text_color = {0, 0, 0, 255},
+        .char_count = 0,
+        .text_box = {0, 0, 0, 0},
+        .cur_str = 0,
+        .cur_byte = 0,
+        .timer = 0.0,
+        .waiting_for_input = false
+    };
+
+    Text bubble_speech_3 = {
+        .writings = {"Te darei um final digno."},
+        .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", 14),
+        .on_frame = {NONE},
+        .text_color = {0, 0, 0, 255},
         .char_count = 0,
         .text_box = {0, 0, 0, 0},
         .cur_str = 0,
@@ -867,9 +1070,41 @@ int main(int argc, char* argv[]) {
     bool interaction_request = false;
     bool ambience_begun = false;
     bool meneghetti_arrived = false;
-    static bool python_dialogue_finished = false;
+    bool python_dialogue_finished = false;
 
     int last_health = meneghetti.health;
+
+    // VARIÁVEIS DE CONTROLE
+    int food_amount = 4;
+    int selected_button = FIGHT;
+    int turn = CHOICE_TURN;
+    int menu_pos = 0;
+    int base_py_damage = 2;
+    int current_py_damage = base_py_damage;
+    double senoidal_timer = 0.0;
+    double counter = 0.0;
+    bool battle_ready = false;
+    bool on_dialogue = false;
+    bool first_dialogue = false;
+    SDL_Rect animated_box;
+    bool animated_box_inited = false;
+    double animated_shrink_timer = 0.0;
+    const double animated_shrink_duration = 0.8;
+    bool enemy_attack_selected = false;
+    bool tried_to_attack = false;
+    double blink_timer = 0.0;
+    bool has_played_slash = false;
+    bool has_played_hit = false;
+    bool soul_ivulnerable = false;
+    double ivulnerability_counter = 0.0;
+    double turn_timer = 0.0;
+    bool should_expand_back = false;
+    bool first_insult = true;
+    bool first_explain = true;
+    bool has_played_eat = false;
+    double death_counter  = 0.0;
+    bool has_played_break = false;
+    bool python_dead = false;
     
     while (running) {
         while (SDL_PollEvent(&event)) {
@@ -967,7 +1202,7 @@ int main(int argc, char* argv[]) {
                 SDL_RenderCopy(game.renderer, current_frame->image, NULL, NULL);
 
                 if (current_frame->text) {
-                    create_dialogue(&meneghetti, game.renderer, current_frame->text, &player_state, &game_state, dt, NULL, NULL, &anim_timer, dialogue_voices);
+                    create_dialogue(&meneghetti, game.renderer, current_frame->text, &player_state, &game_state, dt, NULL, NULL, &anim_timer, dialogue_voices, false);
                 }
 
                 if (cutscene_timer >= current_frame->duration + 0.5 && !last_frame_extend) {
@@ -1012,6 +1247,7 @@ int main(int argc, char* argv[]) {
                 SDL_RenderCopy(game.renderer, title_text.current, NULL, &title_text.collision);
 
                 if (keys[SDL_SCANCODE_RETURN]) {
+                    sound_has_played = false;
                     player_state = IDLE;
                     game_state = OPEN_WORLD;
                 }
@@ -1163,7 +1399,7 @@ int main(int argc, char* argv[]) {
             if (first_dialogue && player_state == DIALOGUE) {
                 arrival_timer += dt;
                 if (arrival_timer >= 1.5) {
-                    create_dialogue(&meneghetti, game.renderer, &arrival_dialogue, &player_state, &game_state, dt, meneghetti_dialogue, &python_dialogue, &anim_timer, dialogue_voices);
+                    create_dialogue(&meneghetti, game.renderer, &arrival_dialogue, &player_state, &game_state, dt, meneghetti_dialogue, &python_dialogue, &anim_timer, dialogue_voices, false);
                 }
             }
             else if (first_dialogue && player_state == MOVABLE) {
@@ -1173,17 +1409,18 @@ int main(int argc, char* argv[]) {
 
             if (player_state == DIALOGUE) {
                 if (rects_intersect (&meneghetti.interact_collision, &boxes[8])) {
-                    create_dialogue(&meneghetti, game.renderer, &py_dialogue, &player_state, &game_state, dt, meneghetti_dialogue, &python_dialogue, &anim_timer, dialogue_voices);
+                    create_dialogue(&meneghetti, game.renderer, &py_dialogue, &player_state, &game_state, dt, meneghetti_dialogue, &python_dialogue, &anim_timer, dialogue_voices, false);
                     python_dialogue_finished = true;
                 }
 
                 if (rects_intersect (&meneghetti.interact_collision, &boxes[9]))
-                    create_dialogue(&meneghetti, game.renderer, &van_dialogue, &player_state, &game_state, dt, meneghetti_dialogue, &python_dialogue, &anim_timer, dialogue_voices);
+                    create_dialogue(&meneghetti, game.renderer, &van_dialogue, &player_state, &game_state, dt, meneghetti_dialogue, &python_dialogue, &anim_timer, dialogue_voices, false);
                     
                 if (rects_intersect (&meneghetti.interact_collision, &boxes[7]))
-                    create_dialogue(&meneghetti, game.renderer, &lake_dialogue, &player_state, &game_state, dt, meneghetti_dialogue, &python_dialogue, &anim_timer, dialogue_voices);
+                    create_dialogue(&meneghetti, game.renderer, &lake_dialogue, &player_state, &game_state, dt, meneghetti_dialogue, &python_dialogue, &anim_timer, dialogue_voices, false);
             }
             else if (python_dialogue_finished) {
+                Mix_HaltChannel(2);
                 player_state = IN_BATTLE;
                 game_state = BATTLE_SCREEN;
             }
@@ -1237,27 +1474,21 @@ int main(int argc, char* argv[]) {
 
         if (game_state == BATTLE_SCREEN) {
             const Uint8 *keys = meneghetti.keystate ? meneghetti.keystate : SDL_GetKeyboardState(NULL);
+            Uint8 e_down = keys[SDL_SCANCODE_E];
+            static Uint8 e_prev = 0;
+            Uint8 e_just_pressed = (e_down && !e_prev) ? 1 : 0;
 
             if (meneghetti.health > 20) meneghetti.health = 20;
-            if (meneghetti.health < 0) meneghetti.health = 0;
-
-            static double senoidal_timer = 0.0;
-            static double counter = 0.0;
-            static bool battle_ready = false;
-            static bool on_dialogue = false;
-            static bool first_dialogue = false;
-
-            static SDL_Rect animated_box;
-            static bool animated_box_inited = false;
-            static double animated_shrink_timer = 0.0;
-            static const double animated_shrink_duration = 0.8;
-
-            static int selected_button = FIGHT;
-            static int turn = CHOICE_TURN;
-            static int menu_pos = 0;
-            static int python_stage;
+            if (meneghetti.health <= 0) {
+                meneghetti.health = 20;
+                player_state = DEAD;
+            }
             
             SDL_Rect base_box = {20, SCREEN_HEIGHT / 2, SCREEN_WIDTH - 40, 132};
+
+            static char x_number[3];
+            snprintf(x_number, sizeof(x_number), "%dx", food_amount);
+            food_amount_text.current = create_txt(game.renderer, x_number, battle_text_font, battle_text_color);
 
             if (!animated_box_inited) {
                 animated_box = base_box;
@@ -1279,10 +1510,6 @@ int main(int argc, char* argv[]) {
             SDL_SetRenderDrawColor(game.renderer, 0, 0, 0, 255);
             SDL_RenderClear(game.renderer);
 
-            if (mr_python_head.health >= 130) python_stage = 1;
-            else if (mr_python_head.health >= 80) python_stage = 2;
-            else python_stage = 3;
-
             if (!battle_ready) {
                 counter += dt;
 
@@ -1293,6 +1520,7 @@ int main(int argc, char* argv[]) {
                     soul.current = animate_sprite(&soul_animation, dt, 0.1, &soul.anim_state, false);
                 }
                 else {
+                    soul.current = soul_animation.frames[0];
                     if (soul.collision.x != button_fight.collision.x + 30 || soul.collision.y != button_fight.collision.y + 30) {
                         if (abs(soul.collision.x - (button_fight.collision.x + 30)) <= 5)
                             soul.collision.x = button_fight.collision.x + 30;
@@ -1316,6 +1544,9 @@ int main(int argc, char* argv[]) {
                 }
             }
             else {
+                if (!Mix_Playing(5)) {
+                    Mix_PlayChannel(5, battle_music, 0);
+                }
                 counter += dt;
                 senoidal_timer += dt;
                 if (counter >= 0.4) counter = 0.2;
@@ -1358,14 +1589,16 @@ int main(int argc, char* argv[]) {
 
                 if (battle_state == ON_MENU) {
                     if (!first_dialogue) {
-                        create_dialogue(&meneghetti, game.renderer, &fight_start_txt, &player_state, &game_state, dt, NULL, NULL, &anim_timer, dialogue_voices);
+                        create_dialogue(&meneghetti, game.renderer, &fight_start_txt, &player_state, &game_state, dt, NULL, NULL, &anim_timer, dialogue_voices, false);
                     }
                     else {
-                        SDL_RenderCopy(game.renderer, text_fight_generic.current, NULL, &text_fight_generic.collision);
+                        create_dialogue(&meneghetti, game.renderer, &fight_generic_txt, &player_state, &game_state, dt, NULL, NULL, &anim_timer, dialogue_voices, false);
+                        if (player_state == IDLE) player_state = IN_BATTLE;
                     }
 
                     if (selected_button > LEAVE) selected_button = FIGHT;
                     if (selected_button < FIGHT) selected_button = LEAVE;
+
                     if (keys[SDL_SCANCODE_D] && counter >= 0.2) {
                         Mix_PlayChannel(-1, move_button, 0);
                         selected_button++;
@@ -1406,7 +1639,7 @@ int main(int argc, char* argv[]) {
                             break;
                     }
 
-                    if (keys[SDL_SCANCODE_E] && counter >= 0.2) {
+                    if (e_just_pressed && counter >= 0.2) {
                         switch(selected_button) {
                             case FIGHT:
                                 Mix_PlayChannel(-1, click_button, 0);
@@ -1436,9 +1669,6 @@ int main(int argc, char* argv[]) {
                 }
 
                 if (battle_state == ON_FIGHT) {
-                    static bool tried_to_attack = false;
-                    static double blink_timer = 0.0;
-
                     SDL_Rect perfect_hit_rect = {bar_target.collision.x + 267, bar_target.collision.y, 56, bar_target.collision.h};
                     SDL_Rect good_hit_rect = {bar_target.collision.x + 183, bar_target.collision.y, 224, bar_target.collision.h};
                     SDL_Rect normal_hit_rect = {bar_target.collision.x + 62, bar_target.collision.y, 466, bar_target.collision.h};
@@ -1456,7 +1686,7 @@ int main(int argc, char* argv[]) {
                             battle_state = ON_MENU;
                             counter = 0.0;
                         }
-                        if (keys[SDL_SCANCODE_E] && counter >= 0.2) {
+                        if (e_just_pressed && counter >= 0.2) {
                             Mix_PlayChannel(-1, click_button, 0);
                             turn = ATTACK_TURN;
                             counter = 0.0;
@@ -1477,7 +1707,7 @@ int main(int argc, char* argv[]) {
                         }
 
                         if (!tried_to_attack) {
-                            if (keys[SDL_SCANCODE_E] && counter >= 0.2) {
+                            if (e_just_pressed && counter >= 0.2) {
                                 int w, h;
                                 tried_to_attack = true;
 
@@ -1517,8 +1747,6 @@ int main(int argc, char* argv[]) {
                             bar_attack.collision.x += bar_speed;
                         }
                         else {
-                            static bool has_played_slash = false;
-                            static bool has_played_hit = false;
                             blink_timer += dt;
 
 
@@ -1533,8 +1761,8 @@ int main(int argc, char* argv[]) {
                                 if (slash.anim_state.counter < 5) {
                                     slash.current = animate_sprite(&slash_animation, dt, 0.2, &slash.anim_state, false);
                                     if (slash.anim_state.counter > 3) {
-                                        if (!Mix_Playing(2) && !has_played_hit) {
-                                            Mix_PlayChannel(2, enemy_hit_sound, 0);
+                                        if (!Mix_Playing(3) && !has_played_hit) {
+                                            Mix_PlayChannel(3, enemy_hit_sound, 0);
                                             has_played_hit = true;
                                             mr_python_head.health -= attack_damage;
                                         }
@@ -1566,7 +1794,7 @@ int main(int argc, char* argv[]) {
                                     if (py_display_width < target_width) py_display_width = target_width;
                                 }
                                 else if (py_display_width < target_width) {
-                                    py_display_width += animate_speed * dt;
+                                    py_display_width += animate_speed * dt * 2;
                                     if (py_display_width > target_width) py_display_width = target_width;
                                 }
 
@@ -1584,17 +1812,28 @@ int main(int argc, char* argv[]) {
                                 mr_python_arms.current = python_arms_animation.frames[0];
                                 mr_python_legs.current = python_legs_animation.frames[0];
 
+                                has_played_slash = false;
+                                has_played_hit = false;
+
                                 blink_timer = 0.0;
                                 tried_to_attack = false;
                                 turn = SOUL_TURN;
+                                slash.anim_state.counter = 0;
                             }
                         }
                     }
                     if (turn == SOUL_TURN) {
+                        bar_attack.collision.x = bar_target.collision.x + 20;
                         double target_w = (double)base_box.h;
-                        static bool soul_ivulnerable = false;
-                        static double ivulnerability_counter = 0.0;
-                        static double turn_timer = 0.0;
+                        int enemy_attack;
+                        int random_dialogue;
+
+                        if (!enemy_attack_selected) {
+                            enemy_attack = randint(1, 3);
+                            random_dialogue = randint(1, 3);
+
+                            enemy_attack_selected = true;
+                        }
 
                         if (soul_ivulnerable) {
                             ivulnerability_counter += dt;
@@ -1607,61 +1846,113 @@ int main(int argc, char* argv[]) {
                             }
                         }
 
-                        animated_shrink_timer += dt;
-                        if (animated_shrink_timer > animated_shrink_duration) animated_shrink_timer = animated_shrink_duration;
+                        if (!should_expand_back && animated_box.w > target_w) {
+                            animated_shrink_timer += dt;
+                            if (animated_shrink_timer > animated_shrink_duration) animated_shrink_timer = animated_shrink_duration;
 
-                        double t = animated_shrink_timer / animated_shrink_duration;
-                        t = 1.0 - pow(1.0 - t, 3.0);
+                            double t = animated_shrink_timer / animated_shrink_duration;
+                            t = 1.0 - pow(1.0 - t, 3.0);
 
-                        double start_w = (double)base_box.w;
-                        double new_w = start_w + (target_w - start_w) * t;
+                            double start_w = (double)base_box.w;
+                            double new_w = start_w + (target_w - start_w) * t;
 
-                        int center_x = base_box.x + base_box.w / 2;
-                        animated_box.w = (int)(new_w + 0.5);
-                        animated_box.x = center_x - animated_box.w / 2;
-                        animated_box.y = base_box.y;
-                        animated_box.h = base_box.h;
+                            int center_x = base_box.x + base_box.w / 2;
+                            animated_box.w = (int)(new_w + 0.5);
+                            animated_box.x = center_x - animated_box.w / 2;
+                            animated_box.y = base_box.y;
+                            animated_box.h = base_box.h;
 
-                        if (animated_box.w == target_w) {
-                            SDL_RenderCopy(game.renderer, soul.current, NULL, &soul.collision);
-
-                            if (keys[SDL_SCANCODE_W]) {
-                                SDL_Rect test = soul.collision;
-                                test.y -= 2;
-                                if (!check_collision(&test, box_borders, 4)) {
-                                    soul.collision.y -= 2;
-                                }
-                            }
-                            if (keys[SDL_SCANCODE_S]) {
-                                SDL_Rect test = soul.collision;
-                                test.y += 2;
-                                if (!check_collision(&test, box_borders, 4)) {
-                                    soul.collision.y += 2;
-                                }   
-                            }
-                            if (keys[SDL_SCANCODE_A]) {
-                                SDL_Rect test = soul.collision;
-                                test.x -= 2;
-                                if (!check_collision(&test, box_borders, 4)) {
-                                    soul.collision.x -= 2;
-                                }
-                            }
-                            if (keys[SDL_SCANCODE_D]) {
-                                SDL_Rect test = soul.collision;
-                                test.x += 2;
-                                if (!check_collision(&test, box_borders, 4)) {
-                                    soul.collision.x += 2;
-                                }
-                            }
-                        }
-                        else {
                             soul.collision.x = (animated_box.x + (animated_box.w / 2)) - (soul.collision.w / 2);
                             soul.collision.y = (animated_box.y + (animated_box.h / 2)) - (soul.collision.h / 2);
                         }
-                    }
-                    else {
-                        animated_shrink_timer = 0.0;
-                        animated_box = base_box;
+                        else if (!should_expand_back) {
+                            turn_timer += dt;
+                            SDL_RenderCopy(game.renderer, soul.current, NULL, &soul.collision);
+
+                            if (turn_timer <= 10.0) {
+                                if (keys[SDL_SCANCODE_W]) {
+                                    SDL_Rect test = soul.collision;
+                                    test.y -= 2;
+                                    if (!check_collision(&test, box_borders, 4)) {
+                                        soul.collision.y -= 2;
+                                    }
+                                }
+                                if (keys[SDL_SCANCODE_S]) {
+                                    SDL_Rect test = soul.collision;
+                                    test.y += 2;
+                                    if (!check_collision(&test, box_borders, 4)) {
+                                        soul.collision.y += 2;
+                                    }   
+                                }
+                                if (keys[SDL_SCANCODE_A]) {
+                                    SDL_Rect test = soul.collision;
+                                    test.x -= 2;
+                                    if (!check_collision(&test, box_borders, 4)) {
+                                        soul.collision.x -= 2;
+                                    }
+                                }
+                                if (keys[SDL_SCANCODE_D]) {
+                                    SDL_Rect test = soul.collision;
+                                    test.x += 2;
+                                    if (!check_collision(&test, box_borders, 4)) {
+                                        soul.collision.x += 2;
+                                    }
+                                }
+
+                                if (turn_timer >= 0.5) {
+                                    python_attacks(game.renderer, &soul, animated_box, &meneghetti.health, current_py_damage, enemy_attack, &soul_ivulnerable, python_props, dt, turn_timer, false);
+                                    switch (random_dialogue) {
+                                        case 1: 
+                                            create_dialogue(&meneghetti, game.renderer, &bubble_speech_1, &player_state, &game_state, dt, NULL, NULL, &anim_timer, dialogue_voices, true);
+                                            break;
+                                        case 2:
+                                            create_dialogue(&meneghetti, game.renderer, &bubble_speech_2, &player_state, &game_state, dt, NULL, NULL, &anim_timer, dialogue_voices, true);
+                                            break;
+                                        case 3:
+                                            create_dialogue(&meneghetti, game.renderer, &bubble_speech_3, &player_state, &game_state, dt, NULL, NULL, &anim_timer, dialogue_voices, true);
+                                            break;
+                                        default:
+                                            break;
+                                    }   
+                                }
+                            }
+                            else {
+                                python_attacks(game.renderer, &soul, animated_box, &meneghetti.health, current_py_damage, enemy_attack, &soul_ivulnerable, python_props, dt, turn_timer, true);
+                                should_expand_back = true;
+                                animated_shrink_timer = 0.0;
+                                turn_timer = 0.0;
+                            }
+                        }
+                        else if (should_expand_back) {
+                            animated_shrink_timer += dt;
+                            if (animated_shrink_timer > animated_shrink_duration) animated_shrink_timer = animated_shrink_duration;
+
+                            double t = animated_shrink_timer / animated_shrink_duration;
+                            t = 1.0 - pow(1.0 - t, 3.0);
+
+                            double start_w = (double)base_box.h;
+                            double target_expand_w = (double)base_box.w;
+                            double new_w = start_w + (target_expand_w - start_w) * t;
+
+                            int center_x = base_box.x + base_box.w / 2;
+                            animated_box.w = (int)(new_w + 0.5);
+                            animated_box.x = center_x - animated_box.w / 2;
+                            animated_box.y = base_box.y;
+                            animated_box.h = base_box.h;
+
+                            if (animated_shrink_timer >= animated_shrink_duration) {
+                                counter = 0.0;
+                                animated_shrink_timer = 0.0;
+                                should_expand_back = false;
+                                turn = CHOICE_TURN;
+                                battle_state = ON_MENU;
+                                enemy_attack_selected = false;
+
+                                if (current_py_damage != base_py_damage) current_py_damage = base_py_damage;
+
+                                animated_box = base_box;
+                            }
+                        }
                     }
                 }
 
@@ -1687,7 +1978,7 @@ int main(int argc, char* argv[]) {
                                 battle_state = ON_MENU;
                                 counter = 0.0;
                             }
-                            if (keys[SDL_SCANCODE_E] && counter >= 0.2) {
+                            if (e_just_pressed && counter >= 0.2) {
                                 Mix_PlayChannel(-1, click_button, 0);
                                 turn = ACT_TURN;
                                 counter = 0.0;
@@ -1726,8 +2017,22 @@ int main(int argc, char* argv[]) {
                                     turn = CHOICE_TURN;
                                     counter = 0.0;
                                 }
-                                if (keys[SDL_SCANCODE_E] && counter >= 0.2) {
+                                if (e_just_pressed && counter >= 0.2) {
                                     Mix_PlayChannel(-1, click_button, 0);
+                                    switch(menu_pos) {
+                                        case 1:
+                                            if (first_insult) {
+                                                current_py_damage += 2;
+                                            }
+                                            break;
+                                        case 2:
+                                            if (first_explain) {
+                                                current_py_damage -= 1;
+                                            }
+                                            break;
+                                        default:
+                                            break;
+                                    }
                                     on_dialogue = true;
                                     counter = 0.0;
                                 }
@@ -1761,13 +2066,23 @@ int main(int argc, char* argv[]) {
                             else {
                                 switch(menu_pos) {
                                 case 0:
-                                    create_dialogue(&meneghetti, game.renderer, &fight_act_txt, &player_state, &game_state, dt, NULL, NULL, &anim_timer, dialogue_voices);
+                                    create_dialogue(&meneghetti, game.renderer, &fight_act_txt, &player_state, &game_state, dt, NULL, NULL, &anim_timer, dialogue_voices, false);
                                     break;
                                 case 1:
-                                    create_dialogue(&meneghetti, game.renderer, &insult_txt, &player_state, &game_state, dt, NULL, NULL, &anim_timer, dialogue_voices);
+                                    if (first_insult) {
+                                        create_dialogue(&meneghetti, game.renderer, &insult_txt, &player_state, &game_state, dt, NULL, NULL, &anim_timer, dialogue_voices, false);
+                                    }
+                                    else {
+                                        create_dialogue(&meneghetti, game.renderer, &insult_generic_txt, &player_state, &game_state, dt, NULL, NULL, &anim_timer, dialogue_voices, false);
+                                    }
                                     break;
                                 case 2:
-                                    create_dialogue(&meneghetti, game.renderer, &explain_txt, &player_state, &game_state, dt, NULL, NULL, &anim_timer, dialogue_voices);
+                                    if (first_explain) {
+                                        create_dialogue(&meneghetti, game.renderer, &explain_txt, &player_state, &game_state, dt, NULL, NULL, &anim_timer, dialogue_voices, false);
+                                    }
+                                    else {
+                                        create_dialogue(&meneghetti, game.renderer, &explain_generic_txt, &player_state, &game_state, dt, NULL, NULL, &anim_timer, dialogue_voices, false);
+                                    }
                                     break;
                                 default:
                                     break;
@@ -1775,9 +2090,25 @@ int main(int argc, char* argv[]) {
 
                                 if (player_state == IDLE) {
                                     on_dialogue = false;
-                                    turn = ACT_TURN;
-                                    player_state = ON_ACT;
+                                    if (menu_pos == 1 && first_insult) {
+                                        turn = SOUL_TURN;
+                                        battle_state = ON_FIGHT;
+                                        player_state = IN_BATTLE;
+                                    }
+                                    else if (menu_pos == 2 && first_explain) {
+                                        turn = SOUL_TURN;
+                                        battle_state = ON_FIGHT;
+                                        player_state = IN_BATTLE;
+                                    }
+                                    else {
+                                        turn = ACT_TURN;
+                                        player_state = IN_BATTLE;
+                                    }
+
+                                    if (first_insult && menu_pos == 1) first_insult = false;
+                                    if (first_explain && menu_pos == 2) first_explain = false;
                                     counter = 0.0;
+                                    menu_pos = 0;
                                 }
                             }
                         }
@@ -1789,124 +2120,46 @@ int main(int argc, char* argv[]) {
                         battle_state = ON_MENU;
                         player_state = IN_BATTLE;
                         on_dialogue = false;
+                        has_played_eat = false;
                         counter = 0.0;
                         menu_pos = 0;
+                        if (food_amount > 0) food_amount--;
                     }
                     else {
-                        if (!on_dialogue) {
-                            if (menu_pos > 3) menu_pos = 0;
-                            if (menu_pos < 0) menu_pos = 3;
-
-                            switch(menu_pos) {
-                                case 0:
-                                    soul.collision.x = text_items[0].collision.x - soul.collision.w - 11;
-                                    soul.collision.y = text_items[0].collision.y + 2;
-                                    break;
-                                case 1:
-                                    soul.collision.x = text_items[1].collision.x - soul.collision.w - 11;
-                                    soul.collision.y = text_items[1].collision.y + 2;
-                                    break;
-                                case 2:
-                                    soul.collision.x = text_items[2].collision.x - soul.collision.w - 11;
-                                    soul.collision.y = text_items[2].collision.y + 2;
-                                    break;
-                                case 3:
-                                    soul.collision.x = text_items[3].collision.x - soul.collision.w - 11;
-                                    soul.collision.y = text_items[3].collision.y + 2;
-                                    break;
-                                default:
-                                    break;
-                            }
+                        if (!on_dialogue && food_amount > 0) {
+                            soul.collision.x = text_item.collision.x - soul.collision.w - 11;
+                            soul.collision.y = text_item.collision.y + 2;
+                            food_amount_text.collision.x = text_item.collision.x + text_item.collision.w + 5;
+                            food_amount_text.collision.y = text_item.collision.y;
 
                             SDL_RenderCopy(game.renderer, soul.current, NULL, &soul.collision);
-                            SDL_RenderCopy(game.renderer, text_items[0].current, NULL, &text_items[0].collision);
-                            SDL_RenderCopy(game.renderer, text_items[1].current, NULL, &text_items[1].collision);
-                            SDL_RenderCopy(game.renderer, text_items[2].current, NULL, &text_items[2].collision);
-                            SDL_RenderCopy(game.renderer, text_items[3].current, NULL, &text_items[3].collision);
+                            SDL_RenderCopy(game.renderer, text_item.current, NULL, &text_item.collision);
+                            SDL_RenderCopy(game.renderer, food_amount_text.current, NULL, &food_amount_text.collision);
 
                             if (keys[SDL_SCANCODE_TAB] && counter >= 0.2) {
                                 Mix_PlayChannel(-1, click_button, 0);
                                 battle_state = ON_MENU;
                                 counter = 0.0;
                             }
-                            if (keys[SDL_SCANCODE_E] && counter >= 0.2) {
+                            if (e_just_pressed && counter >= 0.2) {
                                 Mix_PlayChannel(-1, click_button, 0);
-                                switch(menu_pos) {
-                                        case 0:
-                                            meneghetti.health += 20;
-                                            break;
-                                        case 1:
-                                            meneghetti.health += 15;
-                                            break;
-                                        case 2:
-                                            meneghetti.health += 5;
-                                            break;
-                                        case 3:
-                                            meneghetti.health += 10;
-                                            break;
-                                        default:
-                                            break;
-                                    }
+                                meneghetti.health += 20;
                                 on_dialogue = true;
                                 counter = 0.0;
                             }
-                            if (keys[SDL_SCANCODE_S] && counter >= 0.2) {
-                                Mix_PlayChannel(-1, move_button, 0);
-                                menu_pos++;
-                                counter = 0.0;
-                            }
-                            if (keys[SDL_SCANCODE_W] && counter >= 0.2) {
-                                Mix_PlayChannel(-1, move_button, 0);
-                                menu_pos--;
-                                counter = 0.0;
-                            }
-                            if (keys[SDL_SCANCODE_D] || keys[SDL_SCANCODE_A]) {
-                                if (counter >= 0.2) {
-                                    Mix_PlayChannel(-1, move_button, 0);
-                                    switch(menu_pos) {
-                                        case 0:
-                                            menu_pos = 2;
-                                            break;
-                                        case 1:
-                                            menu_pos = 3;
-                                            break;
-                                        case 2:
-                                            menu_pos = 0;
-                                            break;
-                                        case 3:
-                                            menu_pos = 1;
-                                            break;
-                                        default:
-                                            break;
-                                    }
-                                    counter = 0.0;
-                                }
-                            }
                         }
                         else {
-                            static bool has_played_eat = false;
-                            if (!Mix_Playing(2) && !has_played_eat) {
+                            if (!Mix_Playing(2) && !has_played_eat && food_amount > 0) {
                                 Mix_PlayChannel(2, eat_sound, 0);
                                 has_played_eat = true;
                             }
-
-                            switch(menu_pos) {
-                                case 0:
-                                    create_dialogue(&meneghetti, game.renderer, &picanha_txt, &player_state, &game_state, dt, NULL, NULL, &anim_timer, dialogue_voices);
-                                    break;
-                                case 1:
-                                    create_dialogue(&meneghetti, game.renderer, &cuscuz_txt, &player_state, &game_state, dt, NULL, NULL, &anim_timer, dialogue_voices);
-                                    break;
-                                case 2:
-                                    create_dialogue(&meneghetti, game.renderer, &cafe_txt, &player_state, &game_state, dt, NULL, NULL, &anim_timer, dialogue_voices);
-                                    break;
-                                case 3:
-                                    create_dialogue(&meneghetti, game.renderer, &pao_txt, &player_state, &game_state, dt, NULL, NULL, &anim_timer, dialogue_voices);
-                                    break;
-                                default:
-                                    break;
+                            if (food_amount > 0) {
+                                create_dialogue(&meneghetti, game.renderer, &picanha_txt, &player_state, &game_state, dt, NULL, NULL, &anim_timer, dialogue_voices, false);
                             }
-                        }
+                            else {
+                                create_dialogue(&meneghetti, game.renderer, &no_food_txt, &player_state, &game_state, dt, NULL, NULL, &anim_timer, dialogue_voices, false);
+                            }
+                        }   
                     }
                 }
 
@@ -1945,7 +2198,7 @@ int main(int argc, char* argv[]) {
                                 battle_state = ON_MENU;
                                 counter = 0.0;
                             }
-                            if (keys[SDL_SCANCODE_E] && counter >= 0.2) {
+                            if (e_just_pressed && counter >= 0.2) {
                                 Mix_PlayChannel(-1, click_button, 0);
                                 on_dialogue = true;
                                 counter = 0.0;
@@ -1964,10 +2217,10 @@ int main(int argc, char* argv[]) {
                         else {
                             switch(menu_pos) {
                                 case 0:
-                                    create_dialogue(&meneghetti, game.renderer, &fight_spare_txt, &player_state, &game_state, dt, NULL, NULL, &anim_timer, dialogue_voices);
+                                    create_dialogue(&meneghetti, game.renderer, &fight_spare_txt, &player_state, &game_state, dt, NULL, NULL, &anim_timer, dialogue_voices, false);
                                     break;
                                 case 1:
-                                    create_dialogue(&meneghetti, game.renderer, &fight_leave_txt, &player_state, &game_state, dt, NULL, NULL, &anim_timer, dialogue_voices);
+                                    create_dialogue(&meneghetti, game.renderer, &fight_leave_txt, &player_state, &game_state, dt, NULL, NULL, &anim_timer, dialogue_voices, false);
                                     break;
                                 default:
                                     break;
@@ -1975,6 +2228,233 @@ int main(int argc, char* argv[]) {
                         }
                     }
                 }
+                if (mr_python_head.health <= 0) {
+                    mr_python_head.health = 0;
+                    battle_state = ON_MENU;
+                    turn = CHOICE_TURN;
+
+                    mr_python_head.texture = python_head_animation.frames[1];
+                    mr_python_arms.current = python_arms_animation.frames[1];
+                    mr_python_legs.current = python_legs_animation.frames[1];
+                    
+                    mr_python_head.collision.x = ((SCREEN_WIDTH / 2) - 102) + 4 * sin(senoidal_timer * 40.0);
+                    mr_python_torso.collision.x = ((SCREEN_WIDTH / 2) - 102) + 4 * sin(senoidal_timer * 40.0);
+                    mr_python_legs.collision.x = ((SCREEN_WIDTH / 2) - 102) + 4 * sin(senoidal_timer * 40.0);
+                    mr_python_arms.collision.x = ((SCREEN_WIDTH / 2) - 102) + 4 * sin(senoidal_timer * 40.0);
+
+                    if (end_scene_fade.fading_in) {
+                        end_scene_fade.timer += dt;
+                        end_scene_fade.alpha = 0 + (Uint8)((end_scene_fade.timer / 5.0) * 255);
+
+                        if (end_scene_fade.timer >= 5.0) {
+                            end_scene_fade.alpha = 255;
+                            end_scene_fade.fading_in = false;
+                        }
+                    }
+                    else {
+                        end_scene_fade.timer = 0.0;
+                        python_dead = true;
+                    }
+
+                    if (end_scene_fade.alpha < 255) {
+                        SDL_SetRenderDrawColor(game.renderer, 0, 0, 0, end_scene_fade.alpha);
+                        SDL_SetRenderDrawBlendMode(game.renderer, SDL_BLENDMODE_BLEND);
+
+                        SDL_Rect screen_fade = {0, 0, SCREEN_WIDTH, SCREEN_HEIGHT};
+                        SDL_RenderFillRect(game.renderer, &screen_fade);
+                    }
+                }
+            }
+            if (player_state == DEAD || python_dead) {
+                Mix_HaltChannel(5);
+
+                senoidal_timer = 0.0;
+                counter = 0.0;
+                battle_ready = false;
+                on_dialogue = false;
+                first_dialogue = false;
+                animated_box_inited = false;
+                animated_shrink_timer = 0.0;
+                selected_button = FIGHT;
+                turn = CHOICE_TURN;
+                battle_state = ON_MENU;
+                menu_pos = 0;
+                current_py_damage = base_py_damage;
+                food_amount = 4;
+                enemy_attack_selected = false;
+                tried_to_attack = false;
+                blink_timer = 0.0;
+                has_played_slash = false;
+                has_played_hit = false;
+                soul_ivulnerable = false;
+                ivulnerability_counter = 0.0;
+                turn_timer = 0.0;
+                should_expand_back = false;
+                first_insult = true;
+                first_explain = true;
+                has_played_eat = false;
+
+                python_attacks(game.renderer, &soul, animated_box, &meneghetti.health, current_py_damage, 0, &soul_ivulnerable, python_props, dt, turn_timer, true);
+
+                int attack_widths, attack_heights;
+                command_rain[0].current = create_texture(game.renderer, "assets/sprites/battle/if.png");
+                SDL_QueryTexture(command_rain[0].current, NULL, NULL, &attack_widths, &attack_heights);
+                command_rain[0].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+                command_rain[1].current = create_texture(game.renderer, "assets/sprites/battle/else.png");
+                SDL_QueryTexture(command_rain[1].current, NULL, NULL, &attack_widths, &attack_heights);
+                command_rain[1].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+                command_rain[2].current = create_texture(game.renderer, "assets/sprites/battle/elif.png");
+                SDL_QueryTexture(command_rain[2].current, NULL, NULL, &attack_widths, &attack_heights);
+                command_rain[2].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+                command_rain[3].current = create_texture(game.renderer, "assets/sprites/battle/input.png");
+                SDL_QueryTexture(command_rain[3].current, NULL, NULL, &attack_widths, &attack_heights);
+                command_rain[3].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+                command_rain[4].current = create_texture(game.renderer, "assets/sprites/battle/print.png");
+                SDL_QueryTexture(command_rain[4].current, NULL, NULL, &attack_widths, &attack_heights);
+                command_rain[4].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+                command_rain[5].current = create_texture(game.renderer, "assets/sprites/battle/in.png");
+                SDL_QueryTexture(command_rain[5].current, NULL, NULL, &attack_widths, &attack_heights);
+                command_rain[5].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+
+                parenthesis_enclosure[0].current = create_texture(game.renderer, "assets/sprites/battle/brackets-1.png");
+                SDL_QueryTexture(parenthesis_enclosure[0].current, NULL, NULL, &attack_widths, &attack_heights);
+                parenthesis_enclosure[0].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+                parenthesis_enclosure[1].current = create_texture(game.renderer, "assets/sprites/battle/brackets-2.png");
+                SDL_QueryTexture(parenthesis_enclosure[1].current, NULL, NULL, &attack_widths, &attack_heights);
+                parenthesis_enclosure[1].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+                parenthesis_enclosure[2].current = create_texture(game.renderer, "assets/sprites/battle/key-1.png");
+                SDL_QueryTexture(parenthesis_enclosure[2].current, NULL, NULL, &attack_widths, &attack_heights);
+                parenthesis_enclosure[2].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+                parenthesis_enclosure[3].current = create_texture(game.renderer, "assets/sprites/battle/key-2.png");
+                SDL_QueryTexture(parenthesis_enclosure[3].current, NULL, NULL, &attack_widths, &attack_heights);
+                parenthesis_enclosure[3].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+                parenthesis_enclosure[4].current = create_texture(game.renderer, "assets/sprites/battle/parenthesis-1.png");
+                SDL_QueryTexture(parenthesis_enclosure[4].current, NULL, NULL, &attack_widths, &attack_heights);
+                parenthesis_enclosure[4].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+                parenthesis_enclosure[5].current = create_texture(game.renderer, "assets/sprites/battle/parenthesis-2.png");
+                SDL_QueryTexture(parenthesis_enclosure[5].current, NULL, NULL, &attack_widths, &attack_heights);
+                parenthesis_enclosure[5].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+
+                python_mother[0].current = python_mother_animation.frames[0];
+                SDL_QueryTexture(python_mother[0].current, NULL, NULL, &attack_widths, &attack_heights);
+                python_mother[0].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+                python_mother[1].current = python_mother_animation.frames[1];
+                SDL_QueryTexture(python_mother[1].current, NULL, NULL, &attack_widths, &attack_heights);
+                python_mother[1].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+                python_mother[2].current = python_baby_animation.frames[0];
+                SDL_QueryTexture(python_mother[2].current, NULL, NULL, &attack_widths, &attack_heights);
+                python_mother[2].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+                python_mother[3].current = python_baby_animation.frames[1];
+                SDL_QueryTexture(python_mother[3].current, NULL, NULL, &attack_widths, &attack_heights);
+                python_mother[3].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+
+                python_props[0] = command_rain;
+                python_props[1] = parenthesis_enclosure;
+                python_props[2] = python_mother;
+
+                soul.anim_state.counter = 0;
+                slash.anim_state.counter = 0;
+                mr_python_head.health = 200;
+                bar_attack.collision.x = bar_target.collision.x + 20;
+
+                if (player_state == DEAD) {
+                    game_state = DEATH_SCREEN;
+                }
+                else if (python_dead) {
+                    game_state = FINAL_SCREEN;
+                    end_scene_fade.timer = 0.0;
+                    end_scene_fade.alpha = 255;
+                    end_scene_fade.fading_in = true;
+                    python_dead = false;
+                }
+            }
+        }
+
+        if (game_state == DEATH_SCREEN) {
+            death_counter += dt;
+            SDL_RenderClear(game.renderer);
+            SDL_SetRenderDrawColor(game.renderer, 0, 0, 0, 255);
+
+            if (death_counter <= 2.0) {
+                if (!has_played_break) {
+                    Mix_PlayChannel(-1, soul_break_sound, 0);
+                    has_played_break = true;
+                }
+                SDL_RenderCopy(game.renderer, soul_shattered.current, NULL, &soul.collision);
+            }
+            else {
+                open_world_fade.alpha = (Uint8)255;
+                open_world_fade.fading_in = true;
+                open_world_fade.timer = 0.0;
+                death_counter = 0.0;
+
+                has_played_break = false;
+                meneghetti_arrived = true;
+                player_state = MOVABLE;
+                game_state = OPEN_WORLD;
+
+                scenario.collision = (SDL_Rect){0, -SCREEN_HEIGHT, SCREEN_WIDTH * 2, SCREEN_HEIGHT * 2};
+                meneghetti.collision = (SDL_Rect){(SCREEN_WIDTH / 2) - 10, (SCREEN_HEIGHT / 2) - 16, 19, 32};
+                meneghetti.interact_collision = (SDL_Rect){(SCREEN_WIDTH / 2) - 10, (SCREEN_HEIGHT / 2) + 16, 19, 25};
+                
+                delay_started = false;
+                car_animation_timer = 0.0;
+                arrival_timer = 0.0;
+                python_dialogue_finished = false;
+                first_dialogue = false;
+
+                meneghetti.health = 20;
+                last_health = meneghetti.health;
+
+                SDL_RenderClear(game.renderer);
+            }
+        }
+
+        if (game_state == FINAL_SCREEN) {
+            if (end_scene_fade.alpha > 0) {
+                end_scene_fade.timer += dt;
+                end_scene_fade.alpha = 255 - (Uint8)((end_scene_fade.timer / 3.0) * 255);
+                if (end_scene_fade.timer >= 3.0) {
+                    end_scene_fade.alpha = 0;
+                }
+            }
+
+            SDL_RenderClear(game.renderer);
+            SDL_SetRenderDrawColor(game.renderer, 0, 0, 0, 255);
+
+            create_dialogue(&meneghetti, game.renderer, &end_dialogue, &player_state, &game_state, dt, meneghetti_dialogue, &python_dialogue, &anim_timer, dialogue_voices, false);
+
+            if (end_scene_fade.alpha > 0) {
+                SDL_SetRenderDrawColor(game.renderer, 0, 0, 0, end_scene_fade.alpha);
+                SDL_SetRenderDrawBlendMode(game.renderer, SDL_BLENDMODE_BLEND);
+
+                SDL_Rect screen_fade = {0, 0, SCREEN_WIDTH, SCREEN_HEIGHT};
+                SDL_RenderFillRect(game.renderer, &screen_fade);
+            }
+            if (player_state == MOVABLE) {
+                open_world_fade.alpha = (Uint8)255;
+                open_world_fade.fading_in = true;
+                open_world_fade.timer = 0.0;
+                death_counter = 0.0;
+
+                meneghetti_arrived = false;
+                player_state = IDLE;
+                game_state = TITLE_SCREEN;
+
+                scenario.collision = (SDL_Rect){0, -SCREEN_HEIGHT, SCREEN_WIDTH * 2, SCREEN_HEIGHT * 2};
+                meneghetti.collision = (SDL_Rect){(SCREEN_WIDTH / 2) - 10, (SCREEN_HEIGHT / 2) - 16, 19, 32};
+                meneghetti.interact_collision = (SDL_Rect){(SCREEN_WIDTH / 2) - 10, (SCREEN_HEIGHT / 2) + 16, 19, 25};
+                
+                delay_started = false;
+                car_animation_timer = 0.0;
+                arrival_timer = 0.0;
+                python_dialogue_finished = false;
+                first_dialogue = false;
+
+                meneghetti.health = 20;
+                last_health = meneghetti.health;
+
+                SDL_RenderClear(game.renderer);
             }
         }
 
@@ -2140,7 +2620,7 @@ SDL_Texture *animate_sprite(Animation *anim, double dt, double cooldown, AnimSta
 
 }
 
-void create_dialogue(Character *player, SDL_Renderer *render, Text *text, int *player_state, int *game_state, double dt, Animation *meneghetti_face, Animation *python_face, double *anim_timer, Mix_Chunk **sound) {
+void create_dialogue(Character *player, SDL_Renderer *render, Text *text, int *player_state, int *game_state, double dt, Animation *meneghetti_face, Animation *python_face, double *anim_timer, Mix_Chunk **sound, bool bubble) {
     const Uint8 *keys = player->keystate ? player->keystate : SDL_GetKeyboardState(NULL);
     
     bool has_meneghetti = (meneghetti_face != NULL);
@@ -2169,6 +2649,10 @@ void create_dialogue(Character *player, SDL_Renderer *render, Text *text, int *p
     const double timer_delay = 0.04;
     
     SDL_Rect dialogue_box = {0, 0, 0, 0};
+    Prop bubble_speech = {
+        .current = create_texture(render, "assets/sprites/battle/text-bubble.png"),
+        .collision = dialogue_box
+    };
     switch(*game_state) {
         case CUTSCENE:
             dialogue_box = (SDL_Rect){20, SCREEN_HEIGHT - 200, SCREEN_WIDTH - 40, 180};
@@ -2182,7 +2666,17 @@ void create_dialogue(Character *player, SDL_Renderer *render, Text *text, int *p
             }
             break;
         case BATTLE_SCREEN:
-            dialogue_box = (SDL_Rect){20, SCREEN_HEIGHT / 2, SCREEN_WIDTH - 40, 132};
+            if (bubble) {
+                int w, h;
+                SDL_QueryTexture(bubble_speech.current, NULL, NULL, &w, &h);
+                dialogue_box = (SDL_Rect){380, 40, w * 1.5, h * 1.5};
+            }
+            else {
+                dialogue_box = (SDL_Rect){20, SCREEN_HEIGHT / 2, SCREEN_WIDTH - 40, 132};
+            }
+            break;
+        case FINAL_SCREEN:
+            dialogue_box = (SDL_Rect){25, SCREEN_HEIGHT - 175, SCREEN_WIDTH - 50, 150};
             break;
         default:
             break;
@@ -2192,9 +2686,12 @@ void create_dialogue(Character *player, SDL_Renderer *render, Text *text, int *p
         SDL_SetRenderDrawColor(render, 0, 0, 0, 255);
         SDL_RenderFillRect(render, &dialogue_box);
     }
+    if (bubble) {
+        SDL_RenderCopy(render, bubble_speech.current, NULL, &dialogue_box);
+    }
 
     // BORDAS:
-    if (*game_state != CUTSCENE && *game_state != BATTLE_SCREEN) {
+    if (*game_state != CUTSCENE && *game_state != BATTLE_SCREEN && *game_state != FINAL_SCREEN) {
         SDL_Rect box_borders[] = {{dialogue_box.x, dialogue_box.y, dialogue_box.w, 5}, {dialogue_box.x, dialogue_box.y, 5, dialogue_box.h}, {dialogue_box.x, dialogue_box.y + dialogue_box.h - 5, dialogue_box.w, 5}, {dialogue_box.x + dialogue_box.w - 5, dialogue_box.y, 5, dialogue_box.h}};
         SDL_SetRenderDrawColor(render, 255, 255, 255, 255);
         SDL_RenderFillRects(render, box_borders, 4);
@@ -2208,8 +2705,14 @@ void create_dialogue(Character *player, SDL_Renderer *render, Text *text, int *p
         text->text_box.y = dialogue_box.y + 27;
     }
     else {
-        text->text_box.x = dialogue_box.x + 27;
-        text->text_box.y = dialogue_box.y + 27;
+        if (bubble) {
+            text->text_box.x = dialogue_box.x + 35;
+            text->text_box.y = dialogue_box.y + 5;
+        }
+        else {
+            text->text_box.x = dialogue_box.x + 27;
+            text->text_box.y = dialogue_box.y + 27;
+        }
     }
 
     static double sfx_timer = 0.0;
@@ -2219,7 +2722,7 @@ void create_dialogue(Character *player, SDL_Renderer *render, Text *text, int *p
     if (!text->waiting_for_input) {
         *anim_timer += dt;
         text->timer += dt;
-        if (e_pressed && *game_state != BATTLE_SCREEN) {
+        if (e_pressed && *game_state != BATTLE_SCREEN && !bubble) {
             const char *current = text->writings[text->cur_str];
             while (current[text->cur_byte] != '\0' && text->char_count < MAX_DIALOGUE_CHAR) {
                 char utf8_buffer[5];
@@ -2276,7 +2779,7 @@ void create_dialogue(Character *player, SDL_Renderer *render, Text *text, int *p
         }
     }
     else {
-        if (e_pressed) {
+        if (e_pressed && !bubble) {
             for (int i = 0; i < text->char_count; i++) {
                 if (text->chars[i]) {
                     SDL_DestroyTexture(text->chars[i]);
@@ -2301,10 +2804,16 @@ void create_dialogue(Character *player, SDL_Renderer *render, Text *text, int *p
 
     int pos_x = text->text_box.x;
     int pos_y = text->text_box.y;
-    int max_x = dialogue_box.x + dialogue_box.w - 50;
+
+    int max_x;
+    if (bubble) max_x = dialogue_box.x + dialogue_box.w - 2;
+    else max_x = dialogue_box.x + dialogue_box.w - 50;
+
     int max_y;
     if (*game_state != BATTLE_SCREEN) max_y = dialogue_box.y + dialogue_box.h - 27;
+    else if (bubble) max_y = dialogue_box.y + dialogue_box.h - 2;
     else max_y = dialogue_box.y + dialogue_box.h;
+
     int default_line_height = 16;
     if (text->text_font) {
         default_line_height = TTF_FontHeight(text->text_font);
@@ -2480,7 +2989,6 @@ void create_dialogue(Character *player, SDL_Renderer *render, Text *text, int *p
                 }
         }
     }
-
 }
 
 void reset_dialogue(Text *text) {
@@ -2812,5 +3320,448 @@ void update_reflection(Character *original, Character* reflection, Animation *an
     reflection->collision.y = original->collision.y + original->collision.h;
     reflection->collision.w = original->collision.w;
     reflection->collision.h = original->collision.h;
+
+}
+
+void organize_items(Prop *text_items) {
+    int available = 0;
+    for (int i = 0; i < 4; i++) {
+        if (text_items[i].current != NULL) available++;
+    }
+    if (available == 4) return;
+
+    int x_col1 = 69;
+    int x_col2 = 69 + 200;
+
+    int base_y = -1;
+    for (int i = 0; i < 4; i++) {
+        if (text_items[i].current != NULL) {
+            base_y = (SCREEN_HEIGHT / 2) + 25;
+            break;
+        }
+    }
+    if (base_y == -1) return;
+    
+    Prop *col1[2] = {NULL, NULL};
+    int col1_count = 0;
+
+    Prop *col2[2] = {NULL, NULL};
+    int col2_count = 0;
+
+    if (text_items[0].current != NULL) col1[col1_count++] = &text_items[0];
+    if (text_items[1].current != NULL) col1[col1_count++] = &text_items[1];
+    if (text_items[2].current != NULL) col2[col2_count++] = &text_items[2];
+    if (text_items[3].current != NULL) col2[col2_count++] = &text_items[3];
+
+    int current_y = base_y;
+    for (int i = 0; i < 2; i++) {
+        if (i < col1_count && col1[i] != NULL) {
+            col1[i]->collision.x = x_col1;
+            col1[i]->collision.y = current_y;
+            current_y += col1[i]->collision.h + 10;
+        }
+    }
+
+    current_y = base_y;
+    for (int i = 0; i < 2; i++) {
+        if (i < col2_count && col2[i] != NULL) {
+            col2[i]->collision.x = x_col2;
+            col2[i]->collision.y = current_y;
+            current_y += col2[i]->collision.h + 10; 
+        }
+    }
+
+    if (col1_count == 0 && col2_count > 0) {
+        current_y = base_y;
+        for (int i = 0; i < col2_count; i++) {
+            if (col2[i] != NULL) {
+                col2[i]->collision.x = x_col1;
+                col2[i]->collision.y = current_y;
+                current_y += col2[i]->collision.h + 10;
+            }
+        }
+    }
+
+    Prop tmp[4];
+    for (int i = 0; i < 4; i++) {
+        tmp[i].current = NULL;
+        tmp[i].collision = (SDL_Rect){0, 0, 0, 0};
+    }
+
+    int idx = 0;
+    for (int i = 0; i < col1_count; i++) {
+        if (col1[i] != NULL) {
+            tmp[idx++] = *col1[i];
+        }
+    }
+
+    for (int i = 0; i < col2_count; i++) {
+        if (col2[i] != NULL) {
+            tmp[idx++] = *col2[i];
+        }
+    }
+
+    for (int i = 0; i < 4; i++) {
+        text_items[i] = tmp[i];
+    }
+
+}
+
+int randint(int min, int max) {
+    return min + rand() % (max - min + 1);
+
+}
+
+int choice(int count, ...) {
+    va_list args;
+    va_start(args, count);
+
+    int index = rand() % count;
+    int result = 0;
+
+    for (int i = 0; i < count; i++) {
+        int value = va_arg(args, int);
+        if (i == index) {
+            result = value;
+        }
+    }
+
+    va_end(args);
+    return result;
+
+}
+
+// ATAQUES DO MR. PYTHON
+void python_attacks(SDL_Renderer *render, Prop *soul, SDL_Rect battle_box, int *player_health, int damage, int attack_index, bool *ivulnerable, Prop **props, double dt, double turn_timer, bool clear) {
+    static double spawn_timer = 0.0;
+    static int objects_spawned = 0;
+    static bool attack_active = false;
+    
+    static Prop active_objects[15];
+    static bool created_object[15] = {false};
+    static double objects_speed[15] = {0};
+
+    static double vel_x[15] = {0};
+    static double vel_y[15] = {0};
+    static double angles[15] = {0};
+
+    static int alpha_counter = 0;
+
+    Mix_Chunk* hit_sound = Mix_LoadWAV("assets/sounds/sound_effects/battle-sounds/damage_taken.wav");
+    Mix_Chunk* appear_sound = Mix_LoadWAV("assets/sounds/sound_effects/battle-sounds/object_appears.wav");
+    Mix_Chunk* born_sound = Mix_LoadWAV("assets/sounds/sound_effects/battle-sounds/python_ejects.wav");
+    Mix_Chunk* slam_sound = Mix_LoadWAV("assets/sounds/sound_effects/battle-sounds/slam.wav");
+    Mix_Chunk* strike_sound = Mix_LoadWAV("assets/sounds/sound_effects/battle-sounds/strike_sound.wav");
+
+    static bool played_appear_sound = false;
+
+    if (!clear) {    
+        switch(attack_index) {
+            case 1:
+                if (!attack_active && turn_timer <= 8.0) {
+                    attack_active = true;
+                    spawn_timer = 0.0;
+                    objects_spawned = 0;
+
+                    for (int i = 0; i < 15; i++) {
+                        created_object[i] = false;
+                    }
+                }
+
+                spawn_timer += dt;
+
+                if (attack_active && spawn_timer >= 0.3 && objects_spawned < 15) {
+                    for (int i = 0; i < 15; i++) {
+                        if (!created_object[i]) {
+                            Mix_PlayChannel(-1, appear_sound, 0);
+                            int random_object = randint(0, 5);
+                            active_objects[i] = props[0][random_object];
+
+                            active_objects[i].collision.x = randint(battle_box.x, (battle_box.x + battle_box.w));
+                            active_objects[i].collision.y = battle_box.y;
+
+                            objects_speed[i] = randint(100, 200);
+
+                            created_object[i] = true;
+                            objects_spawned++;
+                            spawn_timer = 0.0;
+                            break;
+                        }
+                    }
+                }
+
+                for (int i = 0; i < 15; i++) {
+                    if (created_object[i]) {
+                        active_objects[i].collision.y += (int)(objects_speed[i] * dt);
+
+                        if ((active_objects[i].collision.y + active_objects[i].collision.h) >= (battle_box.y + battle_box.h)) {
+                            Mix_PlayChannel(-1, slam_sound, 0);
+                            created_object[i] = false;
+                            continue;
+                        }
+
+                        if (!*ivulnerable && rects_intersect(&soul->collision, &active_objects[i].collision)) {
+                            Mix_PlayChannel(-1, hit_sound, 0);
+                            *player_health -= damage;
+                            *ivulnerable = true;
+                            created_object[i] = false;
+                            continue;
+                        }
+
+                        SDL_RenderCopyEx(render, active_objects[i].current, NULL, &active_objects[i].collision, 90, NULL, 0);
+                    }
+                }
+
+                if (turn_timer >= 9.5) {
+                    attack_active = false;
+
+                    bool all_cleared = true;
+                    for (int i = 0; i < 15; i++) {
+                        if (created_object[i]) {
+                            all_cleared = false;
+                            break;
+                        }
+                    }
+
+                    if (all_cleared) {
+                        objects_spawned = 0;
+                    }
+                }
+                break;
+
+            case 2:
+                if (!attack_active && turn_timer <= 8.0) {
+                    attack_active = true;
+                    spawn_timer = 0.0;
+                    objects_spawned = 0;
+
+                    for (int i = 0; i < 15; i++) {
+                        created_object[i] = false;
+                    }
+                }
+
+                spawn_timer += dt;
+
+                if (attack_active && spawn_timer >= 0.75 && objects_spawned < 6) {
+                    for (int i = 0; i < 6; i += 2) {
+                        if (!created_object[i] && !created_object[i + 1]) {
+                            Mix_PlayChannel(-1, appear_sound, 0);
+                            int pair_type = choice(3, 0, 2, 4);
+
+                            active_objects[i] = props[1][pair_type];
+                            active_objects[i + 1] = props[1][pair_type + 1];
+
+                            active_objects[i].collision.x = soul->collision.x - active_objects[i].collision.w - 80;
+                            active_objects[i].collision.y = soul->collision.y;
+                            active_objects[i + 1].collision.x = soul->collision.x + 80;
+                            active_objects[i + 1].collision.y = soul->collision.y;
+                            
+                            objects_speed[i] = 100;
+                            objects_speed[i + 1] = -100;
+
+                            created_object[i] = true;
+                            created_object[i + 1] = true;
+                            objects_spawned += 2;
+                            spawn_timer = 0.0;
+                            break;
+                        }
+                    }
+                }
+
+                for (int i = 0; i < 6; i++) {
+                    if (created_object[i]) {
+                        active_objects[i].collision.x += (int)(objects_speed[i] * dt);
+
+                        if (i % 2 == 0) {
+                            if (created_object[i] && created_object[i + 1]) {
+                                if ((active_objects[i].collision.x + active_objects[i].collision.w) > active_objects[i + 1].collision.x) {
+                                    Mix_PlayChannel(-1, strike_sound, 0);
+                                    created_object[i] = false;
+                                    created_object[i + 1] = false;
+                                    objects_spawned -= 2;
+                                    continue;
+                                }
+                            }
+                        }
+
+                        if (!*ivulnerable && rects_intersect(&soul->collision, &active_objects[i].collision)) {
+                            Mix_PlayChannel(-1, hit_sound, 0);
+                            *player_health -= damage;
+                            *ivulnerable = true;
+
+                            if (i % 2 == 0 && created_object[i + 1]) {
+                                created_object[i + 1] = false;
+                                objects_spawned--;
+                            }
+                            else if (i % 2 == 1 && created_object[i - 1]) {
+                                created_object[i - 1] = false;
+                                objects_spawned--;
+                            }
+
+                            created_object[i] = false;
+                            objects_spawned--;
+                            continue;
+                        }
+
+                        SDL_RenderCopyEx(render, active_objects[i].current, NULL, &active_objects[i].collision, 0, NULL, 0);
+                    }
+                }
+
+                if (turn_timer >= 9.5) {
+                    attack_active = false;
+                    played_appear_sound = false;
+
+                    bool all_cleared = true;
+                    for (int i = 0; i < 15; i++) {
+                        if (created_object[i]) {
+                            all_cleared = false;
+                            break;
+                        }
+                    }
+
+                    if (all_cleared) {
+                        objects_spawned = 0;
+                    }
+                }
+
+                break;
+
+            case 3:
+                if (!attack_active && turn_timer <= 8.0) {
+                    alpha_counter += dt * 300;
+                    if (alpha_counter >= 255) alpha_counter = 255;
+                    SDL_SetTextureAlphaMod(props[2][0].current, alpha_counter);
+                    if (!played_appear_sound) {
+                        Mix_PlayChannel(-1, appear_sound, 0);
+                        played_appear_sound = true;
+                    }
+
+                    props[2][0].collision.x = (battle_box.x + (battle_box.w / 2)) - (props[2][0].collision.w / 2);
+                    props[2][0].collision.y = battle_box.y + 10;
+
+                    if (turn_timer >= 2.0) {
+                        props[2][0].current = props[2][1].current;
+
+                        attack_active = true;
+                        spawn_timer = 0.0;
+                        objects_spawned = 0;
+
+                        for (int i = 0; i < 15; i++) {
+                            created_object[i] = false;
+                        }
+                    }
+                }
+
+                spawn_timer += dt;
+
+                if (attack_active && spawn_timer >= 0.5 && objects_spawned < 15) {
+                    for (int i = 0; i < 15; i++) {
+                        if (!created_object[i]) {
+                            Mix_PlayChannel(-1, born_sound, 0);
+                            active_objects[i] = props[2][2];
+
+                            active_objects[i].collision.x = (props[2][0].collision.x + (props[2][0].collision.w / 2)) - (active_objects[i].collision.w / 2);
+                            active_objects[i].collision.y = (props[2][0].collision.y + (props[2][0].collision.h / 2)) - (active_objects[i].collision.h / 2);
+
+                            int target_x = soul->collision.x + soul->collision.w / 2;
+                            int target_y = soul->collision.y + soul->collision.h / 2;
+                            int start_x = active_objects[i].collision.x + active_objects[i].collision.w / 2;
+                            int start_y = active_objects[i].collision.y + active_objects[i].collision.h / 2;
+
+                            double angle_rad = atan2(target_y - start_y, target_x - start_x);
+                            objects_speed[i] = 130;
+
+                            vel_x[i] = cos(angle_rad) * objects_speed[i];
+                            vel_y[i] = sin(angle_rad) * objects_speed[i];
+                            angles[i] = angle_rad * (180.0 / M_PI);
+
+                            created_object[i] = true;
+                            objects_spawned++;
+                            spawn_timer = 0.0;
+                            break;
+                        }
+                    }
+                }
+
+                for (int i = 0; i < 15; i++) {
+                    if (created_object[i]) {
+                        static double animation_counter = 0.0;
+                        static int frame = 0;
+                        animation_counter += dt;
+
+                        if (frame > 1) frame = 0;
+
+                        if (animation_counter >= 0.1) {
+                            if (frame == 0) {
+                                active_objects[i].current = props[2][2].current;
+                            }
+                            else {
+                                active_objects[i].current = props[2][3].current;
+                            }
+                            frame++;
+                            animation_counter = 0.0;
+                        }
+                            
+                        active_objects[i].collision.x += (int)(vel_x[i] * dt);
+                        active_objects[i].collision.y += (int)(vel_y[i] * dt);
+
+                        if (active_objects[i].collision.x < battle_box.x + 5 || active_objects[i].collision.x + active_objects[i].collision.w > battle_box.x + battle_box.w || active_objects[i].collision.y < battle_box.y || active_objects[i].collision.y + active_objects[i].collision.h > battle_box.y + battle_box.h) {
+                            Mix_PlayChannel(-1, slam_sound, 0);
+                            created_object[i] = false;
+                            continue;
+                        }
+
+                        if (!*ivulnerable && rects_intersect(&soul->collision, &active_objects[i].collision)) {
+                            Mix_PlayChannel(-1, hit_sound, 0);
+                            *player_health -= damage;
+                            *ivulnerable = true;
+                            created_object[i] = false;
+                            continue;
+                        }
+
+                        SDL_RenderCopyEx(render, active_objects[i].current, NULL, &active_objects[i].collision, angles[i] + 90, NULL, 0);
+                    }
+                }
+
+                if (turn_timer >= 9.5) {
+                    attack_active = false;
+                    alpha_counter = 0.0;
+
+                    bool all_cleared = true;
+                    for (int i = 0; i < 15; i++) {
+                        if (created_object[i]) {
+                            all_cleared = false;
+                            break;
+                        }
+                    }
+
+                    if (all_cleared) {
+                        objects_spawned = 0;
+                    }
+                }
+
+                SDL_RenderCopy(render, props[2][0].current, NULL, &props[2][0].collision);
+                SDL_RenderCopy(render, soul->current, NULL, &soul->collision);
+
+                break;
+
+            default:
+                break;
+        }
+    }
+    else if (clear) {
+        spawn_timer = 0.0;
+        objects_spawned = 0;
+        attack_active = false;
+        alpha_counter = 0;
+
+        for (int i = 0; i < 15; i ++) {
+            created_object[i] = false;
+            objects_speed[i] = 0.0;
+            vel_x[i] = 0.0;
+            vel_y[i] = 0.0;
+            angles[i] = 0.0;
+        }
+    }
 
 }
