@@ -69,6 +69,10 @@ typedef struct {
     SDL_Texture* current;
 } Prop;
 typedef struct {
+    SDL_FRect collision;
+    SDL_Texture* current;
+} Projectile;
+typedef struct {
     SDL_Texture* texture;
     SDL_Rect *collisions;
 } RenderItem;
@@ -101,7 +105,7 @@ SDL_Texture *animate_sprite(Animation *anim, double dt, double cooldown, AnimSta
 void create_dialogue(Character *player, SDL_Renderer *render, Text *text, int *player_state, int *game_state, double dt, Animation *meneghetti_face, Animation *python_face, double *anim_timer, Mix_Chunk **sound, bool bubble);
 void reset_dialogue(Text *text);
 void sprite_update(Character *scenario, Character *player, Animation *animation, double dt, SDL_Rect boxes[], SDL_Rect surfaces[], double *anim_timer, double anim_interval, Mix_Chunk **sound);
-bool rects_intersect(SDL_Rect *a, SDL_Rect *b);
+bool rects_intersect(SDL_Rect *a, SDL_Rect *b, SDL_FRect *c);
 bool check_collision(SDL_Rect *player, SDL_Rect boxes[], int box_count);
 static int surface_to_sound_index(int surface_index);
 static int detect_surface(SDL_Rect *player, SDL_Rect surfaces[], int surface_count);
@@ -110,7 +114,7 @@ void update_reflection(Character *original, Character* reflection, Animation *an
 void organize_items(Prop *text_items);
 int randint(int min, int max);
 int choice(int count, ...);
-void python_attacks(SDL_Renderer *render, Prop *soul, SDL_Rect battle_box, int *player_health, int damage, int attack_index, bool *ivulnerable, Prop **props, double dt, double turn_timer, bool clear);
+void python_attacks(SDL_Renderer *render, Prop *soul, SDL_Rect battle_box, int *player_health, int damage, int attack_index, bool *ivulnerable, Projectile **props, double dt, double turn_timer, bool clear);
 
 static int utf8_charlen(const char *s);
 static int utf8_copy_char(const char *s, char *out);
@@ -121,7 +125,7 @@ int main(int argc, char* argv[]) {
     (void) argc;
     (void) argv;
 
-    int game_state = CUTSCENE; // Lembrar de deixar CUTSCENE aqui na versão final.
+    int game_state = BATTLE_SCREEN; // Lembrar de deixar CUTSCENE aqui na versão final.
     int battle_state = ON_MENU;
     FadeState open_world_fade = {0.0, 255, true};
     FadeState end_scene_fade = {0.0, 0, true};
@@ -559,61 +563,61 @@ int main(int argc, char* argv[]) {
     };
 
     int attack_widths, attack_heights;
-    Prop command_rain[6];
+    Projectile command_rain[6];
     command_rain[0].current = create_texture(game.renderer, "assets/sprites/battle/if.png");
     SDL_QueryTexture(command_rain[0].current, NULL, NULL, &attack_widths, &attack_heights);
-    command_rain[0].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+    command_rain[0].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
     command_rain[1].current = create_texture(game.renderer, "assets/sprites/battle/else.png");
     SDL_QueryTexture(command_rain[1].current, NULL, NULL, &attack_widths, &attack_heights);
-    command_rain[1].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+    command_rain[1].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
     command_rain[2].current = create_texture(game.renderer, "assets/sprites/battle/elif.png");
     SDL_QueryTexture(command_rain[2].current, NULL, NULL, &attack_widths, &attack_heights);
-    command_rain[2].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+    command_rain[2].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
     command_rain[3].current = create_texture(game.renderer, "assets/sprites/battle/input.png");
     SDL_QueryTexture(command_rain[3].current, NULL, NULL, &attack_widths, &attack_heights);
-    command_rain[3].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+    command_rain[3].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
     command_rain[4].current = create_texture(game.renderer, "assets/sprites/battle/print.png");
     SDL_QueryTexture(command_rain[4].current, NULL, NULL, &attack_widths, &attack_heights);
-    command_rain[4].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+    command_rain[4].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
     command_rain[5].current = create_texture(game.renderer, "assets/sprites/battle/in.png");
     SDL_QueryTexture(command_rain[5].current, NULL, NULL, &attack_widths, &attack_heights);
-    command_rain[5].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+    command_rain[5].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
 
-    Prop parenthesis_enclosure[6];
+    Projectile parenthesis_enclosure[6];
     parenthesis_enclosure[0].current = create_texture(game.renderer, "assets/sprites/battle/brackets-1.png");
     SDL_QueryTexture(parenthesis_enclosure[0].current, NULL, NULL, &attack_widths, &attack_heights);
-    parenthesis_enclosure[0].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+    parenthesis_enclosure[0].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
     parenthesis_enclosure[1].current = create_texture(game.renderer, "assets/sprites/battle/brackets-2.png");
     SDL_QueryTexture(parenthesis_enclosure[1].current, NULL, NULL, &attack_widths, &attack_heights);
-    parenthesis_enclosure[1].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+    parenthesis_enclosure[1].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
     parenthesis_enclosure[2].current = create_texture(game.renderer, "assets/sprites/battle/key-1.png");
     SDL_QueryTexture(parenthesis_enclosure[2].current, NULL, NULL, &attack_widths, &attack_heights);
-    parenthesis_enclosure[2].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+    parenthesis_enclosure[2].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
     parenthesis_enclosure[3].current = create_texture(game.renderer, "assets/sprites/battle/key-2.png");
     SDL_QueryTexture(parenthesis_enclosure[3].current, NULL, NULL, &attack_widths, &attack_heights);
-    parenthesis_enclosure[3].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+    parenthesis_enclosure[3].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
     parenthesis_enclosure[4].current = create_texture(game.renderer, "assets/sprites/battle/parenthesis-1.png");
     SDL_QueryTexture(parenthesis_enclosure[4].current, NULL, NULL, &attack_widths, &attack_heights);
-    parenthesis_enclosure[4].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+    parenthesis_enclosure[4].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
     parenthesis_enclosure[5].current = create_texture(game.renderer, "assets/sprites/battle/parenthesis-2.png");
     SDL_QueryTexture(parenthesis_enclosure[5].current, NULL, NULL, &attack_widths, &attack_heights);
-    parenthesis_enclosure[5].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+    parenthesis_enclosure[5].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
 
-    Prop python_mother[4];
+    Projectile python_mother[4];
     python_mother[0].current = python_mother_animation.frames[0];
     SDL_QueryTexture(python_mother[0].current, NULL, NULL, &attack_widths, &attack_heights);
-    python_mother[0].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+    python_mother[0].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
     python_mother[1].current = python_mother_animation.frames[1];
     SDL_QueryTexture(python_mother[1].current, NULL, NULL, &attack_widths, &attack_heights);
-    python_mother[1].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+    python_mother[1].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
     python_mother[2].current = python_baby_animation.frames[0];
     SDL_QueryTexture(python_mother[2].current, NULL, NULL, &attack_widths, &attack_heights);
-    python_mother[2].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+    python_mother[2].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
     python_mother[3].current = python_baby_animation.frames[1];
     SDL_QueryTexture(python_mother[3].current, NULL, NULL, &attack_widths, &attack_heights);
-    python_mother[3].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+    python_mother[3].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
 
-    Prop *python_props[] = {command_rain, parenthesis_enclosure, python_mother};
+    Projectile *python_props[] = {command_rain, parenthesis_enclosure, python_mother};
 
     SDL_Texture* damage_numbers[] = {create_texture(game.renderer, "assets/sprites/battle/number-10.png"), create_texture(game.renderer, "assets/sprites/battle/number-20.png"), create_texture(game.renderer, "assets/sprites/battle/number-30.png"), create_texture(game.renderer, "assets/sprites/battle/number-40.png")};
     Prop damage;
@@ -621,6 +625,7 @@ int main(int argc, char* argv[]) {
     // SONS:
     Mix_Chunk* cutscene_music = Mix_LoadWAV("assets/sounds/soundtracks/the_story_of_a_hero.wav");
     Mix_Chunk* battle_music = Mix_LoadWAV("assets/sounds/soundtracks/battle_against_abstraction.wav");
+    Mix_VolumeChunk(battle_music, 30);
 
     Mix_Chunk* ambience = Mix_LoadWAV("assets/sounds/sound_effects/in-game/ambient_sound.wav");
     if (!ambience) {
@@ -1105,6 +1110,7 @@ int main(int argc, char* argv[]) {
     double death_counter  = 0.0;
     bool has_played_break = false;
     bool python_dead = false;
+    int death_count = 0;
     
     while (running) {
         while (SDL_PollEvent(&event)) {
@@ -1329,13 +1335,13 @@ int main(int argc, char* argv[]) {
                 sprite_update(&scenario, &meneghetti, anim_pack, dt, boxes, surfaces, &anim_timer, anim_interval, walking_sounds);
             }
             if (interaction_request) {
-                if (rects_intersect(&meneghetti.interact_collision, &boxes[8]))
+                if (rects_intersect(&meneghetti.interact_collision, &boxes[8], NULL))
                     player_state = DIALOGUE;
 
-                if (rects_intersect(&meneghetti.interact_collision, &boxes[9]))
+                if (rects_intersect(&meneghetti.interact_collision, &boxes[9], NULL))
                     player_state = DIALOGUE;
                 
-                if (rects_intersect(&meneghetti.interact_collision, &boxes[7]))
+                if (rects_intersect(&meneghetti.interact_collision, &boxes[7], NULL))
                     player_state = DIALOGUE;
 
                 interaction_request = false;
@@ -1404,15 +1410,31 @@ int main(int argc, char* argv[]) {
             }
 
             if (player_state == DIALOGUE) {
-                if (rects_intersect (&meneghetti.interact_collision, &boxes[8])) {
-                    create_dialogue(&meneghetti, game.renderer, &py_dialogue, &player_state, &game_state, dt, meneghetti_dialogue, &python_dialogue, &anim_timer, dialogue_voices, false);
+                if (rects_intersect (&meneghetti.interact_collision, &boxes[8], NULL)) {
+                    switch (death_count) {
+                        case 0:
+                            create_dialogue(&meneghetti, game.renderer, &py_dialogue, &player_state, &game_state, dt, meneghetti_dialogue, &python_dialogue, &anim_timer, dialogue_voices, false);
+                            break;
+                        case 1:
+                            create_dialogue(&meneghetti, game.renderer, &py_dialogue_ad, &player_state, &game_state, dt, meneghetti_dialogue, &python_dialogue, &anim_timer, dialogue_voices, false);
+                            break;
+                        case 2:
+                            create_dialogue(&meneghetti, game.renderer, &py_dialogue_ad_2, &player_state, &game_state, dt, meneghetti_dialogue, &python_dialogue, &anim_timer, dialogue_voices, false);
+                            break;
+                        case 3:
+                            create_dialogue(&meneghetti, game.renderer, &py_dialogue_ad_3, &player_state, &game_state, dt, meneghetti_dialogue, &python_dialogue, &anim_timer, dialogue_voices, false);
+                            break;
+                        default:
+                            create_dialogue(&meneghetti, game.renderer, &py_dialogue_ad_4, &player_state, &game_state, dt, meneghetti_dialogue, &python_dialogue, &anim_timer, dialogue_voices, false);
+                            break;
+                    }
                     python_dialogue_finished = true;
                 }
 
-                if (rects_intersect (&meneghetti.interact_collision, &boxes[9]))
+                if (rects_intersect (&meneghetti.interact_collision, &boxes[9], NULL))
                     create_dialogue(&meneghetti, game.renderer, &van_dialogue, &player_state, &game_state, dt, meneghetti_dialogue, &python_dialogue, &anim_timer, dialogue_voices, false);
                     
-                if (rects_intersect (&meneghetti.interact_collision, &boxes[7]))
+                if (rects_intersect (&meneghetti.interact_collision, &boxes[7], NULL))
                     create_dialogue(&meneghetti, game.renderer, &lake_dialogue, &player_state, &game_state, dt, meneghetti_dialogue, &python_dialogue, &anim_timer, dialogue_voices, false);
             }
             else if (python_dialogue_finished) {
@@ -1710,28 +1732,28 @@ int main(int argc, char* argv[]) {
                                 damage.collision.x = py_life.x + py_life.w;
                                 damage.collision.y = py_life.y - 20;
                                 
-                                if (rects_intersect(&bar_attack.collision, &perfect_hit_rect)) {
+                                if (rects_intersect(&bar_attack.collision, &perfect_hit_rect, NULL)) {
                                     attack_damage = meneghetti.strength * 3;
                                     damage.current = damage_numbers[3];
                                     SDL_QueryTexture(damage.current, NULL, NULL, &w, &h);
                                     damage.collision.w = w;
                                     damage.collision.h = h;
                                 }
-                                else if (rects_intersect(&bar_attack.collision, &good_hit_rect)) {
+                                else if (rects_intersect(&bar_attack.collision, &good_hit_rect, NULL)) {
                                     attack_damage = meneghetti.strength * 1.5;
                                     damage.current = damage_numbers[2];
                                     SDL_QueryTexture(damage.current, NULL, NULL, &w, &h);
                                     damage.collision.w = w;
                                     damage.collision.h = h;
                                 }
-                                else if (rects_intersect(&bar_attack.collision, &normal_hit_rect)) {
+                                else if (rects_intersect(&bar_attack.collision, &normal_hit_rect, NULL)) {
                                     attack_damage = meneghetti.strength;
                                     damage.current = damage_numbers[1];
                                     SDL_QueryTexture(damage.current, NULL, NULL, &w, &h);
                                     damage.collision.w = w;
                                     damage.collision.h = h;
                                 }
-                                else if (rects_intersect(&bar_attack.collision, &bad_hit_rect)) {
+                                else if (rects_intersect(&bar_attack.collision, &bad_hit_rect, NULL)) {
                                     attack_damage = meneghetti.strength * 0.5;
                                     damage.current = damage_numbers[0];
                                     SDL_QueryTexture(damage.current, NULL, NULL, &w, &h);
@@ -1749,8 +1771,8 @@ int main(int argc, char* argv[]) {
                             if (blink_timer <= 3.0) {
                                 bar_attack.current = animate_sprite(&bar_attack_animation, dt, 0.1, &bar_attack.anim_state, false);
 
-                                if (!Mix_Playing(0) && !has_played_slash) {
-                                    Mix_PlayChannel(0, slash_sound, 0);
+                                if (!Mix_Playing(6) && !has_played_slash) {
+                                    Mix_PlayChannel(6, slash_sound, 0);
                                     has_played_slash = true;
                                 }
                                 SDL_RenderCopy(game.renderer, slash.current, NULL, &slash.collision);
@@ -1914,6 +1936,7 @@ int main(int argc, char* argv[]) {
                             }
                             else {
                                 python_attacks(game.renderer, &soul, animated_box, &meneghetti.health, current_py_damage, enemy_attack, &soul_ivulnerable, python_props, dt, turn_timer, true);
+                                python_props[2][0].current = python_mother_animation.frames[0];
                                 should_expand_back = true;
                                 animated_shrink_timer = 0.0;
                                 turn_timer = 0.0;
@@ -2264,6 +2287,11 @@ int main(int argc, char* argv[]) {
             if (player_state == DEAD || python_dead) {
                 Mix_HaltChannel(5);
 
+                mr_python_head.texture = python_head_animation.frames[0];
+                mr_python_arms.current = python_arms_animation.frames[0];
+                mr_python_legs.current = python_legs_animation.frames[0];
+
+                python_props[2][0].current = python_mother_animation.frames[0];
                 senoidal_timer = 0.0;
                 counter = 0.0;
                 battle_ready = false;
@@ -2295,54 +2323,54 @@ int main(int argc, char* argv[]) {
                 int attack_widths, attack_heights;
                 command_rain[0].current = create_texture(game.renderer, "assets/sprites/battle/if.png");
                 SDL_QueryTexture(command_rain[0].current, NULL, NULL, &attack_widths, &attack_heights);
-                command_rain[0].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+                command_rain[0].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
                 command_rain[1].current = create_texture(game.renderer, "assets/sprites/battle/else.png");
                 SDL_QueryTexture(command_rain[1].current, NULL, NULL, &attack_widths, &attack_heights);
-                command_rain[1].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+                command_rain[1].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
                 command_rain[2].current = create_texture(game.renderer, "assets/sprites/battle/elif.png");
                 SDL_QueryTexture(command_rain[2].current, NULL, NULL, &attack_widths, &attack_heights);
-                command_rain[2].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+                command_rain[2].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
                 command_rain[3].current = create_texture(game.renderer, "assets/sprites/battle/input.png");
                 SDL_QueryTexture(command_rain[3].current, NULL, NULL, &attack_widths, &attack_heights);
-                command_rain[3].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+                command_rain[3].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
                 command_rain[4].current = create_texture(game.renderer, "assets/sprites/battle/print.png");
                 SDL_QueryTexture(command_rain[4].current, NULL, NULL, &attack_widths, &attack_heights);
-                command_rain[4].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+                command_rain[4].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
                 command_rain[5].current = create_texture(game.renderer, "assets/sprites/battle/in.png");
                 SDL_QueryTexture(command_rain[5].current, NULL, NULL, &attack_widths, &attack_heights);
-                command_rain[5].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+                command_rain[5].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
 
                 parenthesis_enclosure[0].current = create_texture(game.renderer, "assets/sprites/battle/brackets-1.png");
                 SDL_QueryTexture(parenthesis_enclosure[0].current, NULL, NULL, &attack_widths, &attack_heights);
-                parenthesis_enclosure[0].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+                parenthesis_enclosure[0].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
                 parenthesis_enclosure[1].current = create_texture(game.renderer, "assets/sprites/battle/brackets-2.png");
                 SDL_QueryTexture(parenthesis_enclosure[1].current, NULL, NULL, &attack_widths, &attack_heights);
-                parenthesis_enclosure[1].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+                parenthesis_enclosure[1].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
                 parenthesis_enclosure[2].current = create_texture(game.renderer, "assets/sprites/battle/key-1.png");
                 SDL_QueryTexture(parenthesis_enclosure[2].current, NULL, NULL, &attack_widths, &attack_heights);
-                parenthesis_enclosure[2].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+                parenthesis_enclosure[2].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
                 parenthesis_enclosure[3].current = create_texture(game.renderer, "assets/sprites/battle/key-2.png");
                 SDL_QueryTexture(parenthesis_enclosure[3].current, NULL, NULL, &attack_widths, &attack_heights);
-                parenthesis_enclosure[3].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+                parenthesis_enclosure[3].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
                 parenthesis_enclosure[4].current = create_texture(game.renderer, "assets/sprites/battle/parenthesis-1.png");
                 SDL_QueryTexture(parenthesis_enclosure[4].current, NULL, NULL, &attack_widths, &attack_heights);
-                parenthesis_enclosure[4].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+                parenthesis_enclosure[4].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
                 parenthesis_enclosure[5].current = create_texture(game.renderer, "assets/sprites/battle/parenthesis-2.png");
                 SDL_QueryTexture(parenthesis_enclosure[5].current, NULL, NULL, &attack_widths, &attack_heights);
-                parenthesis_enclosure[5].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+                parenthesis_enclosure[5].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
 
                 python_mother[0].current = python_mother_animation.frames[0];
                 SDL_QueryTexture(python_mother[0].current, NULL, NULL, &attack_widths, &attack_heights);
-                python_mother[0].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+                python_mother[0].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
                 python_mother[1].current = python_mother_animation.frames[1];
                 SDL_QueryTexture(python_mother[1].current, NULL, NULL, &attack_widths, &attack_heights);
-                python_mother[1].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+                python_mother[1].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
                 python_mother[2].current = python_baby_animation.frames[0];
                 SDL_QueryTexture(python_mother[2].current, NULL, NULL, &attack_widths, &attack_heights);
-                python_mother[2].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+                python_mother[2].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
                 python_mother[3].current = python_baby_animation.frames[1];
                 SDL_QueryTexture(python_mother[3].current, NULL, NULL, &attack_widths, &attack_heights);
-                python_mother[3].collision = (SDL_Rect){0, 0, attack_widths, attack_heights};
+                python_mother[3].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
 
                 python_props[0] = command_rain;
                 python_props[1] = parenthesis_enclosure;
@@ -2355,9 +2383,11 @@ int main(int argc, char* argv[]) {
 
                 if (player_state == DEAD) {
                     game_state = DEATH_SCREEN;
+                    death_count++;
                 }
                 else if (python_dead) {
                     game_state = FINAL_SCREEN;
+                    death_count = 0;
                     end_scene_fade.timer = 0.0;
                     end_scene_fade.alpha = 255;
                     end_scene_fade.fading_in = true;
@@ -2734,14 +2764,14 @@ void create_dialogue(Character *player, SDL_Renderer *render, Text *text, int *p
                 }
                 text->cur_byte += n;
             }
-            text->waiting_for_input = true;
+            if(!bubble) text->waiting_for_input = true;
         }
         else if (text->timer >= timer_delay) {
             text->timer = 0.0;
             const char *current = text->writings[text->cur_str];
             
             if (current[text->cur_byte] == '\0') {
-                text->waiting_for_input = true;
+               if (!bubble) text->waiting_for_input = true;
             }
             else {
                 if (text->char_count < MAX_DIALOGUE_CHAR) {
@@ -2911,7 +2941,7 @@ void create_dialogue(Character *player, SDL_Renderer *render, Text *text, int *p
         }
 
         if (current_y + line_height > max_y) {
-            text->waiting_for_input = true;
+            if (!bubble) text->waiting_for_input = true;
             break;
         }
     }
@@ -3193,40 +3223,74 @@ void sprite_update(Character *scenario, Character *player, Animation *animation,
 
 }
 
-bool rects_intersect(SDL_Rect *a, SDL_Rect *b) {
-    int leftX_A, leftX_B;
-    int topY_A, topY_B;
-    int rightX_A, rightX_B;
-    int bottomY_A, bottomY_B;
+bool rects_intersect(SDL_Rect *a, SDL_Rect *b, SDL_FRect *c) {
+    if (b) {
+        int leftX_A, leftX_B;
+        int topY_A, topY_B;
+        int rightX_A, rightX_B;
+        int bottomY_A, bottomY_B;
 
-    leftX_A = a->x;
-    topY_A = a->y;
-    rightX_A = a->x + a->w;
-    bottomY_A = a->y + a->h;
+        leftX_A = a->x;
+        topY_A = a->y;
+        rightX_A = a->x + a->w;
+        bottomY_A = a->y + a->h;
 
-    leftX_B = b->x;
-    topY_B = b->y;
-    rightX_B = b->x + b->w;
-    bottomY_B = b->y + b->h;
+        leftX_B = b->x;
+        topY_B = b->y;
+        rightX_B = b->x + b->w;
+        bottomY_B = b->y + b->h;
 
-    if (leftX_A >= rightX_B)
-        return false;
+        if (leftX_A >= rightX_B)
+            return false;
 
-    if (topY_A >= bottomY_B)
-        return false;
+        if (topY_A >= bottomY_B)
+            return false;
 
-    if (rightX_A <= leftX_B)
-        return false;
+        if (rightX_A <= leftX_B)
+            return false;
 
-    if (bottomY_A <= topY_B)
-        return false;
+        if (bottomY_A <= topY_B)
+            return false;
 
-    return true;
+        return true;
+    }
+    else if (c) {
+        int leftX_A, leftX_C;
+        int topY_A, topY_C;
+        int rightX_A, rightX_C;
+        int bottomY_A, bottomY_C;
+
+        leftX_A = a->x;
+        topY_A = a->y;
+        rightX_A = a->x + a->w;
+        bottomY_A = a->y + a->h;
+
+        leftX_C = c->x;
+        topY_C = c->y;
+        rightX_C = c->x + c->w;
+        bottomY_C = c->y + c->h;
+
+        if (leftX_A >= rightX_C)
+            return false;
+
+        if (topY_A >= bottomY_C)
+            return false;
+
+        if (rightX_A <= leftX_C)
+            return false;
+
+        if (bottomY_A <= topY_C)
+            return false;
+
+        return true;
+    }
+
+    return false;
 }
 
 bool check_collision(SDL_Rect *player, SDL_Rect boxes[], int box_count) {
     for (int i = 0; i < box_count; i++) {
-        if (rects_intersect(player, &boxes[i])) return true;
+        if (rects_intersect(player, &boxes[i], NULL)) return true;
     }
 
     return false;
@@ -3431,12 +3495,12 @@ int choice(int count, ...) {
 }
 
 // ATAQUES DO MR. PYTHON
-void python_attacks(SDL_Renderer *render, Prop *soul, SDL_Rect battle_box, int *player_health, int damage, int attack_index, bool *ivulnerable, Prop **props, double dt, double turn_timer, bool clear) {
+void python_attacks(SDL_Renderer *render, Prop *soul, SDL_Rect battle_box, int *player_health, int damage, int attack_index, bool *ivulnerable, Projectile **props, double dt, double turn_timer, bool clear) {
     static double spawn_timer = 0.0;
     static int objects_spawned = 0;
     static bool attack_active = false;
     
-    static Prop active_objects[15];
+    static Projectile active_objects[15];
     static bool created_object[15] = {false};
     static double objects_speed[15] = {0};
 
@@ -3499,7 +3563,7 @@ void python_attacks(SDL_Renderer *render, Prop *soul, SDL_Rect battle_box, int *
                             continue;
                         }
 
-                        if (!*ivulnerable && rects_intersect(&soul->collision, &active_objects[i].collision)) {
+                        if (!*ivulnerable && rects_intersect(&soul->collision, NULL, &active_objects[i].collision)) {
                             Mix_PlayChannel(-1, hit_sound, 0);
                             *player_health -= damage;
                             *ivulnerable = true;
@@ -3507,7 +3571,7 @@ void python_attacks(SDL_Renderer *render, Prop *soul, SDL_Rect battle_box, int *
                             continue;
                         }
 
-                        SDL_RenderCopyEx(render, active_objects[i].current, NULL, &active_objects[i].collision, 90, NULL, 0);
+                        SDL_RenderCopyExF(render, active_objects[i].current, NULL, &active_objects[i].collision, 90, NULL, 0);
                     }
                 }
 
@@ -3555,8 +3619,8 @@ void python_attacks(SDL_Renderer *render, Prop *soul, SDL_Rect battle_box, int *
                             active_objects[i + 1].collision.x = soul->collision.x + 80;
                             active_objects[i + 1].collision.y = soul->collision.y;
                             
-                            objects_speed[i] = 100;
-                            objects_speed[i + 1] = -100;
+                            objects_speed[i] = 130;
+                            objects_speed[i + 1] = -130;
 
                             created_object[i] = true;
                             created_object[i + 1] = true;
@@ -3583,7 +3647,7 @@ void python_attacks(SDL_Renderer *render, Prop *soul, SDL_Rect battle_box, int *
                             }
                         }
 
-                        if (!*ivulnerable && rects_intersect(&soul->collision, &active_objects[i].collision)) {
+                        if (!*ivulnerable && rects_intersect(&soul->collision, NULL, &active_objects[i].collision)) {
                             Mix_PlayChannel(-1, hit_sound, 0);
                             *player_health -= damage;
                             *ivulnerable = true;
@@ -3602,7 +3666,7 @@ void python_attacks(SDL_Renderer *render, Prop *soul, SDL_Rect battle_box, int *
                             continue;
                         }
 
-                        SDL_RenderCopyEx(render, active_objects[i].current, NULL, &active_objects[i].collision, 0, NULL, 0);
+                        SDL_RenderCopyExF(render, active_objects[i].current, NULL, &active_objects[i].collision, 0, NULL, 0);
                     }
                 }
 
@@ -3668,7 +3732,7 @@ void python_attacks(SDL_Renderer *render, Prop *soul, SDL_Rect battle_box, int *
                             int start_y = active_objects[i].collision.y + (active_objects[i].collision.h / 2);
 
                             double angle_rad = atan2(target_y - start_y, target_x - start_x);
-                            objects_speed[i] = 130;
+                            objects_speed[i] = 100;
 
                             vel_x[i] = cos(angle_rad) * objects_speed[i];
                             vel_y[i] = sin(angle_rad) * objects_speed[i];
@@ -3701,8 +3765,8 @@ void python_attacks(SDL_Renderer *render, Prop *soul, SDL_Rect battle_box, int *
                             animation_counter = 0.0;
                         }
                             
-                        active_objects[i].collision.x += (int)(vel_x[i] * dt);
-                        active_objects[i].collision.y += (int)(vel_y[i] * dt);
+                        active_objects[i].collision.x += vel_x[i] * dt;
+                        active_objects[i].collision.y += vel_y[i] * dt;
 
                         if (active_objects[i].collision.x < battle_box.x + 5 || active_objects[i].collision.x + active_objects[i].collision.w > battle_box.x + battle_box.w || active_objects[i].collision.y < battle_box.y || active_objects[i].collision.y + active_objects[i].collision.h > battle_box.y + battle_box.h) {
                             Mix_PlayChannel(-1, slam_sound, 0);
@@ -3710,7 +3774,7 @@ void python_attacks(SDL_Renderer *render, Prop *soul, SDL_Rect battle_box, int *
                             continue;
                         }
 
-                        if (!*ivulnerable && rects_intersect(&soul->collision, &active_objects[i].collision)) {
+                        if (!*ivulnerable && rects_intersect(&soul->collision, NULL, &active_objects[i].collision)) {
                             Mix_PlayChannel(-1, hit_sound, 0);
                             *player_health -= damage;
                             *ivulnerable = true;
@@ -3718,7 +3782,7 @@ void python_attacks(SDL_Renderer *render, Prop *soul, SDL_Rect battle_box, int *
                             continue;
                         }
 
-                        SDL_RenderCopyEx(render, active_objects[i].current, NULL, &active_objects[i].collision, angles[i] + 90, NULL, 0);
+                        SDL_RenderCopyExF(render, active_objects[i].current, NULL, &active_objects[i].collision, angles[i] + 90, NULL, 0);
                     }
                 }
 
@@ -3739,7 +3803,7 @@ void python_attacks(SDL_Renderer *render, Prop *soul, SDL_Rect battle_box, int *
                     }
                 }
 
-                SDL_RenderCopy(render, props[2][0].current, NULL, &props[2][0].collision);
+                SDL_RenderCopyF(render, props[2][0].current, NULL, &props[2][0].collision);
                 SDL_RenderCopy(render, soul->current, NULL, &soul->collision);
 
                 break;
