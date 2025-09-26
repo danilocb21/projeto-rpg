@@ -36,7 +36,14 @@ Project is: _complete_.
 - [ ] 👾 Debug mode
 
 ## 📸 Screenshots
-![PLACEHOLDER]
+
+| Title Screen | Meneghetti en la Playa |
+|--------------|-------------------------|
+| ![TITLE](assets/screenshots/title.png) | ![MENEGHETTI_EN_LA_PLAYA](assets/screenshots/meneghetti_en_la_playa.png) |
+
+| In-game Dialogue | Mr. Python (Animation) |
+|-----------------|------------------------|
+| ![DIALOGUE](assets/screenshots/dialogue.png) | ![MR_PYTHON](assets/screenshots/mr_python.gif) |
 
 ## 💾 Setup
 - __Windows:__
