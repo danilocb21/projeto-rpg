@@ -126,7 +126,7 @@ int main(int argc, char* argv[]) {
     (void) argc;
     (void) argv;
 
-    int game_state = OPEN_WORLD; // Lembrar de deixar CUTSCENE aqui na versão final.
+    int game_state = CUTSCENE; // Lembrar de deixar CUTSCENE aqui na versão final.
     int battle_state = ON_MENU;
     FadeState open_world_fade = {0.0, 255, true};
     FadeState end_scene_fade = {0.0, 0, true};
