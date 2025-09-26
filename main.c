@@ -11,30 +11,50 @@
 #include <SDL2/SDL_ttf.h>
 #include <SDL2/SDL_mixer.h>
 
+// TELA:
 #define SCREEN_WIDTH 640
 #define SCREEN_HEIGHT 480
 
+// RENDERIZAÇÃO:
 #define WINDOW_FLAGS (SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE)
 #define RENDERER_FLAGS (SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC)
 #define IMAGE_FLAGS (IMG_INIT_PNG)
 #define MIXER_FLAGS (MIX_INIT_MP3 | MIX_INIT_OGG)
+
+// QUANTIDADES:
 #define COLLISION_QUANTITY 12
 #define SURFACE_QUANTITY 13
-#define DIALOGUE_FONT_SIZE 25
-#define MAX_DIALOGUE_CHAR 512
-#define MAX_DIALOGUE_STR 20
 #define DIR_COUNT 4
 
+// LIMITES:
+#define MAX_OBJECT_AMOUNT 200
+#define MAX_DIALOGUE_CHAR 512
+#define MAX_DIALOGUE_STR 20
+
+// GRANDEZAS:
+#define BASE_FONT_SIZE 24
+#define BUBBLE_FONT_SIZE 14
+#define SFX_VOLUME 30
+#define MUSIC_VOLUME 35
+
+// CANAIS:
+#define DEFAULT_CHANNEL -1
+#define MUSIC_CHANNEL 0
+#define SFX_CHANNEL 2
+#define DIALOGUE_CHANNEL 3
+
+// TÍTULO:
 #define GAME_TITLE "C-Tale: Meneghetti Vs Python"
 
 typedef struct {
     SDL_Window *window;
     SDL_Renderer *renderer;
 } Game;
+
 typedef struct {
     SDL_Texture *texture;
     SDL_Rect collision;
-    float sprite_vel; // Alterado para float para moldar a fluidez do movimento com base nos FPS.
+    float sprite_vel;
     const Uint8 *keystate;
     SDL_Rect interact_collision;
     int health;
@@ -42,14 +62,17 @@ typedef struct {
     int facing;
     int counters[DIR_COUNT];
 } Character;
+
 typedef struct {
-    SDL_Texture **frames; // Array de texturas.
-    int count; // Quantidade de frames do array.
+    SDL_Texture **frames;
+    int count;
 } Animation;
+
 typedef struct {
     int counter;
     double timer;
 } AnimState;
+
 typedef struct {
     char *writings[MAX_DIALOGUE_STR];
     int on_frame[MAX_DIALOGUE_STR];
@@ -63,25 +86,30 @@ typedef struct {
     double timer;
     bool waiting_for_input;
 } Text;
+
 typedef struct {
     AnimState anim_state;
     SDL_Rect collision;
     SDL_Texture* current;
     int facing;
 } Prop;
+
 typedef struct {
     SDL_FRect collision;
     SDL_Texture* current;
 } Projectile;
+
 typedef struct {
     SDL_Texture* texture;
     SDL_Rect *collisions;
 } RenderItem;
+
 typedef struct {
     SDL_Texture* image;
     Text* text;
     double duration;
 } CutsceneFrame;
+
 typedef struct {
     double timer;
     Uint8 alpha;
@@ -97,13 +125,8 @@ enum battle_states { ON_MENU, ON_FIGHT, ON_ACT, ON_ITEM, ON_LEAVE };
 enum battle_turns { CHOICE_TURN, ATTACK_TURN, SOUL_TURN, ACT_TURN };
 
 bool sdl_initialize(Game *game);
-// bool load_media(Game *game);
-void object_cleanup(SDL_Texture *obj);
-void game_cleanup(Game *game, int exit_status);
-SDL_Texture *create_texture(SDL_Renderer *render, const char *dir);
-SDL_Texture *create_txt(SDL_Renderer *render, const char *utf8_char, TTF_Font *font, SDL_Color color);
 SDL_Texture *animate_sprite(Animation *anim, double dt, double cooldown, AnimState *state, bool blink);
-void create_dialogue(Character *player, SDL_Renderer *render, Text *text, int *player_state, int *game_state, double dt, Animation *meneghetti_face, Animation *python_face, double *anim_timer, Mix_Chunk **sound, bool bubble);
+void create_dialogue(Character *player, SDL_Renderer *render, Text *text, int *player_state, int *game_state, double dt, Animation *meneghetti_face, Animation *python_face, double *anim_timer, Mix_Chunk **sound, Prop *bubble_speech);
 void reset_dialogue(Text *text);
 void sprite_update(Character *scenario, Character *player, Animation *animation, double dt, SDL_Rect boxes[], SDL_Rect surfaces[], double *anim_timer, double anim_interval, Mix_Chunk **sound);
 bool rects_intersect(SDL_Rect *a, SDL_Rect *b, SDL_FRect *c);
@@ -115,10 +138,41 @@ void update_reflection(Character *original, Character* reflection, Animation *an
 void organize_items(Prop *text_items);
 int randint(int min, int max);
 int choice(int count, ...);
-void python_attacks(SDL_Renderer *render, Prop *soul, SDL_Rect battle_box, int *player_health, int damage, int attack_index, bool *ivulnerable, Projectile **props, double dt, double turn_timer, bool clear);
+void python_attacks(SDL_Renderer *render, Prop *soul, SDL_Rect battle_box, int *player_health, int damage, int attack_index, bool *ivulnerable, Projectile **props, double dt, double turn_timer, Mix_Chunk **sound, bool clear);
+
+// FUNÇÕES DE CARREGAMENTO:
+SDL_Texture *create_texture(SDL_Renderer *render, const char *dir);
+Mix_Chunk *create_chunk(const char *dir, int volume);
+TTF_Font *create_font(const char *dir, int size);
+SDL_Texture *create_text(SDL_Renderer *render, const char *utf8_char, TTF_Font *font, SDL_Color color);
+
+// FUNÇÕES DE REGISTRO DE OBJETOS:
+static void track_texture(SDL_Texture *texture);
+static bool already_tracked_texture(SDL_Texture *texture);
+static void track_chunk(Mix_Chunk *chunk);
+static bool already_tracked_chunk(Mix_Chunk *chunk);
+static void track_font(TTF_Font *font);
+static bool already_tracked_font(TTF_Font *font);
+
+// FUNÇÕES DE LIMPEZA:
+void game_cleanup(Game *game, int exit_status);
+void clean_tracked_resources(void);
 
 static int utf8_charlen(const char *s);
 static int utf8_copy_char(const char *s, char *out);
+
+// RASTREADORES GLOBAIS:
+static SDL_Texture **guarded_textures = NULL;
+static int guarded_textures_count = 0;
+static int guarded_textures_capacity = 0;
+
+static Mix_Chunk **guarded_chunks = NULL;
+static int guarded_chunks_count = 0;
+static int guarded_chunks_capacity = 0;
+
+static TTF_Font **guarded_fonts = NULL;
+static int guarded_fonts_count = 0;
+static int guarded_fonts_capacity = 0;
 
 int main(int argc, char* argv[]) {
     srand(time(NULL));
@@ -127,16 +181,8 @@ int main(int argc, char* argv[]) {
     (void) argv;
 
     int game_state = CUTSCENE; // Lembrar de deixar CUTSCENE aqui na versão final.
-    int battle_state = ON_MENU;
-    FadeState open_world_fade = {0.0, 255, true};
-    FadeState end_scene_fade = {0.0, 0, true};
-
-    double arrival_timer = 0.0;
-    double car_animation_timer = 0.0;
-    bool delay_started = false;
-    float parallax_factor = 0.5f;
-
     int player_state = MOVABLE;
+    int battle_state = ON_MENU;
 
     Game game = {
         .renderer = NULL,
@@ -148,6 +194,15 @@ int main(int argc, char* argv[]) {
 
     SDL_bool running = SDL_TRUE;
     SDL_Event event;
+
+    FadeState open_world_fade = {0.0, 255, true};
+    FadeState end_scene_fade = {0.0, 0, true};
+
+    // FONTES:
+    TTF_Font* title_text_font = create_font("assets/fonts/PixelOperator-Bold.ttf", BASE_FONT_SIZE);
+    TTF_Font* dialogue_text_font = create_font("assets/fonts/PixelOperator-Bold.ttf", BASE_FONT_SIZE);
+    TTF_Font* battle_text_font = create_font("assets/fonts/PixelOperatorSC-Bold.ttf", BASE_FONT_SIZE);
+    TTF_Font* bubble_text_font = create_font("assets/fonts/PixelOperator-Bold.ttf", BUBBLE_FONT_SIZE);
 
     // PACOTES DE ANIMAÇÃO:
     Animation anim_pack[DIR_COUNT];
@@ -210,10 +265,9 @@ int main(int argc, char* argv[]) {
     }
 
     Animation mr_python_animation[DIR_COUNT];
-    mr_python_animation[UP].count = 2;
+    mr_python_animation[UP].count = 1;
     mr_python_animation[UP].frames = malloc(sizeof(SDL_Texture*) * mr_python_animation[UP].count);
     mr_python_animation[UP].frames[0] = create_texture(game.renderer, "assets/sprites/characters/mr-python-back-1.png");
-    mr_python_animation[UP].frames[1] = create_texture(game.renderer, "assets/sprites/characters/mr-python-back-1.png");
     mr_python_animation[DOWN].count = 2;
     mr_python_animation[DOWN].frames = malloc(sizeof(SDL_Texture*) * mr_python_animation[DOWN].count);
     mr_python_animation[DOWN].frames[0] = create_texture(game.renderer, "assets/sprites/characters/mr-python-front-1.png");
@@ -258,10 +312,9 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    TTF_Font* title_text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", 24);
     SDL_Color title_text_color = {101, 107, 117, 255};
     Animation title_text_anim = {
-        .frames = (SDL_Texture*[]){create_txt(game.renderer, "APERTE ENTER PARA COMEÇAR", title_text_font, title_text_color), NULL},
+        .frames = (SDL_Texture*[]){create_text(game.renderer, "APERTE ENTER PARA COMEÇAR", title_text_font, title_text_color), NULL},
         .count = 2
     };
 
@@ -402,7 +455,7 @@ int main(int argc, char* argv[]) {
     Prop title_text = {
         .anim_state.counter = 0,
         .anim_state.timer = 0.0,
-        .current = create_txt(game.renderer, "APERTE ENTER PARA COMEÇAR", title_text_font, title_text_color),
+        .current = title_text_anim.frames[0],
     };
     int title_text_width, title_text_height;
     SDL_QueryTexture(title_text.current, NULL, NULL, &title_text_width, &title_text_height);
@@ -483,6 +536,10 @@ int main(int argc, char* argv[]) {
         .collision = {0, 0, SCREEN_WIDTH * 2, SCREEN_HEIGHT * 2}
     };
 
+    Prop bubble_speech = {
+        .current = create_texture(game.renderer, "assets/sprites/battle/text-bubble.png"),
+    };
+
     SDL_Texture* fight_b_textures[] = {create_texture(game.renderer, "assets/sprites/hud/button-fight.png"), create_texture(game.renderer, "assets/sprites/hud/button-fight-select.png")};
     Prop button_fight = {
         .current = fight_b_textures[1],
@@ -509,60 +566,59 @@ int main(int argc, char* argv[]) {
 
     // PROPS DA BATALHA:
     int battle_text_width, battle_text_height;
-    TTF_Font* battle_text_font = TTF_OpenFont("assets/fonts/PixelOperatorSC-Bold.ttf", 24);
     SDL_Color battle_text_color = {255, 255, 255, 255};
     Prop battle_name = {
-        .current = create_txt(game.renderer, "MENEGHETTI", battle_text_font, battle_text_color),
+        .current = create_text(game.renderer, "MENEGHETTI", battle_text_font, battle_text_color),
     };
     SDL_QueryTexture(battle_name.current, NULL, NULL, &battle_text_width, &battle_text_height);
     battle_name.collision = (SDL_Rect){button_fight.collision.x + 6, button_fight.collision.y - battle_text_height - 8, battle_text_width,battle_text_height};
 
     Prop battle_hp = {
-        .current = create_txt(game.renderer, "HP", battle_text_font, battle_text_color),
+        .current = create_text(game.renderer, "HP", battle_text_font, battle_text_color),
     };
     SDL_QueryTexture(battle_hp.current, NULL, NULL, &battle_text_width, &battle_text_height);
     battle_hp.collision = (SDL_Rect){button_act.collision.x + 35, button_fight.collision.y - battle_text_height - 8, battle_text_width, battle_text_height};
 
     Prop battle_hp_amount = {
-        .current = create_txt(game.renderer, "20/20", battle_text_font, battle_text_color),
+        .current = create_text(game.renderer, "20/20", battle_text_font, battle_text_color),
     };
     SDL_QueryTexture(battle_hp_amount.current, NULL, NULL, &battle_text_width, &battle_text_height);
     battle_hp_amount.collision = (SDL_Rect){button_act.collision.x + 140, button_fight.collision.y - battle_text_height - 8, battle_text_width, battle_text_height};
 
     Prop food_amount_text = {
-        .current = create_txt(game.renderer, "4x", battle_text_font, battle_text_color),
+        .current = create_text(game.renderer, "4x", battle_text_font, battle_text_color),
     };
     SDL_QueryTexture(food_amount_text.current, NULL, NULL, &battle_text_width, &battle_text_height);
     food_amount_text.collision = (SDL_Rect){0, 0, battle_text_width, battle_text_height};
 
     Prop text_attack_act = {
-        .current = create_txt(game.renderer, "* Mr. Python", title_text_font, battle_text_color),
+        .current = create_text(game.renderer, "* Mr. Python", dialogue_text_font, battle_text_color),
     };
     SDL_QueryTexture(text_attack_act.current, NULL, NULL, &battle_text_width, &battle_text_height);
     text_attack_act.collision = (SDL_Rect){69, (SCREEN_HEIGHT / 2) + 25, battle_text_width, battle_text_height};
 
     Prop text_item = {
-        .current = create_txt(game.renderer, "* Picanha", title_text_font, battle_text_color)
+        .current = create_text(game.renderer, "* Picanha", dialogue_text_font, battle_text_color)
     };
     SDL_QueryTexture(text_item.current, NULL, NULL, &battle_text_width, &battle_text_height);
     text_item.collision = (SDL_Rect){69, (SCREEN_HEIGHT / 2) + 25, battle_text_width, battle_text_height};
 
     Prop text_act[3];
-    text_act[0].current = create_txt(game.renderer, "* Examinar", title_text_font, battle_text_color);
+    text_act[0].current = create_text(game.renderer, "* Examinar", dialogue_text_font, battle_text_color);
     SDL_QueryTexture(text_act[0].current, NULL, NULL, &battle_text_width, &battle_text_height);
     text_act[0].collision = (SDL_Rect){69, (SCREEN_HEIGHT / 2) + 25, battle_text_width, battle_text_height};
-    text_act[1].current = create_txt(game.renderer, "* Insultar", title_text_font, battle_text_color);
+    text_act[1].current = create_text(game.renderer, "* Insultar", dialogue_text_font, battle_text_color);
     SDL_QueryTexture(text_act[1].current, NULL, NULL, &battle_text_width, &battle_text_height);
     text_act[1].collision = (SDL_Rect){69, text_act[0].collision.y + text_act[0].collision.h + 10, battle_text_width, battle_text_height};
-    text_act[2].current = create_txt(game.renderer, "* Explicar", title_text_font, battle_text_color);
+    text_act[2].current = create_text(game.renderer, "* Explicar", dialogue_text_font, battle_text_color);
     SDL_QueryTexture(text_act[2].current, NULL, NULL, &battle_text_width, &battle_text_height);
     text_act[2].collision = (SDL_Rect){text_act[0].collision.x + text_act[0].collision.w + 100, text_act[0].collision.y, battle_text_width, battle_text_height};
 
     Prop text_leave[2];
-    text_leave[0].current = create_txt(game.renderer, "* Poupar", title_text_font, battle_text_color);
+    text_leave[0].current = create_text(game.renderer, "* Poupar", dialogue_text_font, battle_text_color);
     SDL_QueryTexture(text_leave[0].current, NULL, NULL, &battle_text_width, &battle_text_height);
     text_leave[0].collision = (SDL_Rect){69, (SCREEN_HEIGHT / 2) + 25, battle_text_width, battle_text_height};
-    text_leave[1].current = create_txt(game.renderer, "* Fugir", title_text_font, battle_text_color);
+    text_leave[1].current = create_text(game.renderer, "* Fugir", dialogue_text_font, battle_text_color);
     SDL_QueryTexture(text_leave[1].current, NULL, NULL, &battle_text_width, &battle_text_height);
     text_leave[1].collision = (SDL_Rect){69, text_leave[0].collision.y + text_leave[0].collision.h + 10, battle_text_width, battle_text_height};
 
@@ -638,54 +694,36 @@ int main(int argc, char* argv[]) {
     Prop damage;
 
     // SONS:
-    Mix_Chunk* cutscene_music = Mix_LoadWAV("assets/sounds/soundtracks/the_story_of_a_hero.wav");
-    Mix_Chunk* battle_music = Mix_LoadWAV("assets/sounds/soundtracks/battle_against_abstraction.wav");
-    Mix_VolumeChunk(battle_music, 30);
+    Mix_Chunk* cutscene_music = create_chunk("assets/sounds/soundtracks/the_story_of_a_hero.wav", MUSIC_VOLUME);
+    Mix_Chunk* battle_music = create_chunk("assets/sounds/soundtracks/battle_against_abstraction.wav", MUSIC_VOLUME);
+    Mix_Chunk* ambience = create_chunk("assets/sounds/sound_effects/in-game/ambient_sound.wav", MUSIC_VOLUME);
 
-    Mix_Chunk* ambience = Mix_LoadWAV("assets/sounds/sound_effects/in-game/ambient_sound.wav");
-    if (!ambience) {
-        fprintf(stderr, "Error loading sound: %s\n", Mix_GetError());
-        return 1;
-    }
-    Mix_VolumeChunk(ambience, 35);
 
-    Mix_Chunk* walking_sounds[] = {Mix_LoadWAV("assets/sounds/sound_effects/in-game/walking_grass.wav"), Mix_LoadWAV("assets/sounds/sound_effects/in-game/walking_concrete.wav"), Mix_LoadWAV("assets/sounds/sound_effects/in-game/walking_sand.wav"), Mix_LoadWAV("assets/sounds/sound_effects/in-game/walking_bridge.wav"), Mix_LoadWAV("assets/sounds/sound_effects/in-game/walking_wood.wav"), Mix_LoadWAV("assets/sounds/sound_effects/in-game/walking_dirt.wav")};
-    for (int i = 0; i < 5; i++) {
-        if (!walking_sounds[i]) {
-            fprintf(stderr, "Error loading sound: %s\n", Mix_GetError());
-            return 1;
-        }
-    }
-    Mix_Volume(0, 35); // Volume do canal dos efeitos sonoros.
+    Mix_Chunk* walking_sounds[] = {create_chunk("assets/sounds/sound_effects/in-game/walking_grass.wav", SFX_VOLUME), create_chunk("assets/sounds/sound_effects/in-game/walking_concrete.wav", SFX_VOLUME), create_chunk("assets/sounds/sound_effects/in-game/walking_sand.wav", SFX_VOLUME), create_chunk("assets/sounds/sound_effects/in-game/walking_bridge.wav", SFX_VOLUME), create_chunk("assets/sounds/sound_effects/in-game/walking_wood.wav", SFX_VOLUME), create_chunk("assets/sounds/sound_effects/in-game/walking_dirt.wav", SFX_VOLUME)};
 
-    Mix_Chunk* dialogue_voices[] = {Mix_LoadWAV("assets/sounds/sound_effects/in-game/meneghetti_voice.wav"), Mix_LoadWAV("assets/sounds/sound_effects/in-game/mr_python_voice.wav"), Mix_LoadWAV("assets/sounds/sound_effects/in-game/text_sound.wav")};
-    for (int i = 0; i < 2; i++) {
-        if (!dialogue_voices[i]) {
-            fprintf(stderr, "Error loading sound: %s\n", Mix_GetError());
-            return 1;
-        }
-    }
+    Mix_Chunk* battle_sounds[] = {create_chunk("assets/sounds/sound_effects/battle-sounds/damage_taken.wav", SFX_VOLUME), create_chunk("assets/sounds/sound_effects/battle-sounds/object_appears.wav", SFX_VOLUME), create_chunk("assets/sounds/sound_effects/battle-sounds/python_ejects.wav", SFX_VOLUME), create_chunk("assets/sounds/sound_effects/battle-sounds/slam.wav", SFX_VOLUME), create_chunk("assets/sounds/sound_effects/battle-sounds/strike_sound.wav", SFX_VOLUME)};
 
-    Mix_Chunk* civic_engine = Mix_LoadWAV("assets/sounds/sound_effects/in-game/car_engine.wav");
-    Mix_Chunk* civic_brake = Mix_LoadWAV("assets/sounds/sound_effects/in-game/car_brake.wav");
-    Mix_Chunk* civic_door = Mix_LoadWAV("assets/sounds/sound_effects/in-game/car_door.wav");
+    Mix_Chunk* dialogue_voices[] = {create_chunk("assets/sounds/sound_effects/in-game/meneghetti_voice.wav", SFX_VOLUME), create_chunk("assets/sounds/sound_effects/in-game/mr_python_voice.wav", SFX_VOLUME), create_chunk("assets/sounds/sound_effects/in-game/text_sound.wav", SFX_VOLUME)};
 
-    Mix_Chunk* title_sound = Mix_LoadWAV("assets/sounds/sound_effects/in-game/logo_sound.wav");
+    Mix_Chunk* civic_engine = create_chunk("assets/sounds/sound_effects/in-game/car_engine.wav", SFX_VOLUME);
+    Mix_Chunk* civic_brake = create_chunk("assets/sounds/sound_effects/in-game/car_brake.wav", SFX_VOLUME);
+    Mix_Chunk* civic_door = create_chunk("assets/sounds/sound_effects/in-game/car_door.wav", SFX_VOLUME);
 
-    Mix_Chunk* battle_sound = Mix_LoadWAV("assets/sounds/sound_effects/battle-sounds/battle_appears.wav");
-    Mix_Chunk* move_button = Mix_LoadWAV("assets/sounds/sound_effects/battle-sounds/move_selection.wav");
-    Mix_Chunk* click_button = Mix_LoadWAV("assets/sounds/sound_effects/battle-sounds/select_sound.wav");
-    Mix_Chunk* slash_sound = Mix_LoadWAV("assets/sounds/sound_effects/battle-sounds/slash.wav");
-    Mix_Chunk* enemy_hit_sound = Mix_LoadWAV("assets/sounds/sound_effects/battle-sounds/enemy_hit.wav");
-    Mix_Chunk* eat_sound = Mix_LoadWAV("assets/sounds/sound_effects/battle-sounds/heal_sound.wav");
+    Mix_Chunk* title_sound = create_chunk("assets/sounds/sound_effects/in-game/logo_sound.wav", SFX_VOLUME);
 
-    Mix_Chunk* soul_break_sound = Mix_LoadWAV("assets/sounds/sound_effects/battle-sounds/soul_shatter.wav");
+    Mix_Chunk* battle_sound = create_chunk("assets/sounds/sound_effects/battle-sounds/battle_appears.wav", SFX_VOLUME);
+    Mix_Chunk* move_button = create_chunk("assets/sounds/sound_effects/battle-sounds/move_selection.wav", SFX_VOLUME);
+    Mix_Chunk* click_button = create_chunk("assets/sounds/sound_effects/battle-sounds/select_sound.wav", SFX_VOLUME);
+    Mix_Chunk* slash_sound = create_chunk("assets/sounds/sound_effects/battle-sounds/slash.wav", SFX_VOLUME);
+    Mix_Chunk* enemy_hit_sound = create_chunk("assets/sounds/sound_effects/battle-sounds/enemy_hit.wav", SFX_VOLUME);
+    Mix_Chunk* eat_sound = create_chunk("assets/sounds/sound_effects/battle-sounds/heal_sound.wav", SFX_VOLUME);
+    Mix_Chunk* soul_break_sound = create_chunk("assets/sounds/sound_effects/battle-sounds/soul_shatter.wav", SFX_VOLUME);
 
     // BASES DE TEXTO:
     Text py_dialogue = {
         .writings = {"* Há quanto tempo, Meneghetti.", "* Mr. Python...", "* Você veio até aqui batalhar contra mim?", "* Lembra o que aconteceu da última vez, não é?", "* Você e as outras linguagens de baixo nível nem me arranharam. Foi realmente estúpido.", "* Não vou cometer os mesmos erros do passado...", "* Você vai pagar pelo que fez com eles.", "* As linguagens de baixo nível ainda não morreram.", "* Eu ainda estou aqui para acabar com você.", "* Que peninha... Deve ser tão triste ser o último que restou.", "* Eu entendo a sua frustração.", "* Vamos acabar com isso para que você se junte a eles logo.", "* Venha, Mr. Python."},
         .on_frame = {PYTHON, MENEGHETTI, PYTHON, PYTHON, PYTHON, MENEGHETTI_SAD, MENEGHETTI_ANGRY, MENEGHETTI, MENEGHETTI_ANGRY, PYTHON, PYTHON, PYTHON, MENEGHETTI_ANGRY},
-        .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", DIALOGUE_FONT_SIZE),
+        .text_font = dialogue_text_font,
         .text_color = {255, 255, 255, 255},
         .char_count = 0,
         .text_box = {0, 0, 0, 0},
@@ -702,7 +740,7 @@ int main(int argc, char* argv[]) {
     Text py_dialogue_ad = {
         .writings = {"* Hm? Você conseguiu voltar?", "* Você é realmente duro na queda, Meneghetti. Devo admitir.", "* Eu ainda não desisti. Não pense que vai ser fácil.", "* Vamos ver se você vai ter a mesma sorte desta vez."},
         .on_frame = {PYTHON, PYTHON, MENEGHETTI_ANGRY, PYTHON},
-        .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", DIALOGUE_FONT_SIZE),
+        .text_font = dialogue_text_font,
         .text_color = {255, 255, 255, 255},
         .char_count = 0,
         .text_box = {0, 0, 0, 0},
@@ -719,7 +757,7 @@ int main(int argc, char* argv[]) {
     Text py_dialogue_ad_2 = {
         .writings = {"* Que insistência. Por que não desiste logo?", "* Não enquanto eu não acabar com você.", "* Hahahah. Não precisa ser tão agressivo."},
         .on_frame = {PYTHON, MENEGHETTI_ANGRY, PYTHON},
-        .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", DIALOGUE_FONT_SIZE),
+        .text_font = dialogue_text_font,
         .text_color = {255, 255, 255, 255},
         .char_count = 0,
         .text_box = {0, 0, 0, 0},
@@ -736,7 +774,7 @@ int main(int argc, char* argv[]) {
     Text py_dialogue_ad_3 = {
         .writings = {"* Acho que tá um pouco difícil para você. Quer que eu diminua a dificuldade?", "* Cala a boca.", "* Desculpa, pessoal, eu tentei. Vamos para mais um round então."},
         .on_frame = {PYTHON, MENEGHETTI, PYTHON},
-        .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", DIALOGUE_FONT_SIZE),
+        .text_font = dialogue_text_font,
         .text_color = {255, 255, 255, 255},
         .char_count = 0,
         .text_box = {0, 0, 0, 0},
@@ -753,7 +791,7 @@ int main(int argc, char* argv[]) {
     Text py_dialogue_ad_4 = {
         .writings = {"* ...", "* Vamos logo com isso."},
         .on_frame = {MENEGHETTI, PYTHON},
-        .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", DIALOGUE_FONT_SIZE),
+        .text_font = dialogue_text_font,
         .text_color = {255, 255, 255, 255},
         .char_count = 0,
         .text_box = {0, 0, 0, 0},
@@ -770,7 +808,7 @@ int main(int argc, char* argv[]) {
     Text van_dialogue = {
         .writings = {"* Então este é o Python-móvel...", "* Agora tenho certeza de que meu inimigo está aqui..."},
         .on_frame = {MENEGHETTI, MENEGHETTI_ANGRY},
-        .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", DIALOGUE_FONT_SIZE),
+        .text_font = dialogue_text_font,
         .text_color = {255, 255, 255, 255},
         .char_count = 0,
         .text_box = {0, 0, 0, 0},
@@ -786,7 +824,7 @@ int main(int argc, char* argv[]) {
 
     Text lake_dialogue = {
         .writings = {"* O lago com animação te faz pensar sobre os esforços do criador deste universo.", "* Isso te enche de determinação.", "* Se fosse programado em Python não daria pra fazer isso."},
-        .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", DIALOGUE_FONT_SIZE),
+        .text_font = dialogue_text_font,
         .on_frame = {NONE, NONE, MENEGHETTI},
         .text_color = {255, 255, 255, 255},
         .char_count = 0,
@@ -799,7 +837,7 @@ int main(int argc, char* argv[]) {
 
     Text arrival_dialogue = {
         .writings = {"* Meu radar-C detectou locomoções de alto nível por esta área.", "* Hora de acabar com isso de uma vez por todas."},
-        .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", DIALOGUE_FONT_SIZE),
+        .text_font = dialogue_text_font,
         .on_frame = {MENEGHETTI, MENEGHETTI},
         .text_color = {255, 255, 255, 255},
         .char_count = 0,
@@ -812,7 +850,7 @@ int main(int argc, char* argv[]) {
 
     Text end_dialogue = {
         .writings = {"* Como... Como que isso foi acontecer?", "* Não faz sentido... Nós tínhamos ganhado essa luta.", "* EU já havia ganhado.", "* ...", "* Esse não é o fim, Meneghetti.", "* Por agora, você venceu. Mas um dia...", "* Um dia, as linguagens de baixo nível serão esquecidas.", "* E esse será o dia de sua ruína, e do meu triunfo.", "* Após anos de reinado das linguagens de alto nível...", "* A luz que um dia havia sumido dos programadores finalmente voltou a brilhar.", "* Um raio de esperança e um futuro próspero agora poderiam ser contemplados.", "* Tudo isso graças à ele..."},
-        .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", DIALOGUE_FONT_SIZE),
+        .text_font = dialogue_text_font,
         .on_frame = {PYTHON, PYTHON, PYTHON, PYTHON, PYTHON, PYTHON, PYTHON, PYTHON, NONE, NONE, NONE, NONE},
         .text_color = {255, 255, 255, 255},
         .char_count = 0,
@@ -825,7 +863,7 @@ int main(int argc, char* argv[]) {
 
     Text cutscene_1 = {
         .writings = {"Na época de ouro da computação, o mundo vivia em harmonia com diversas linguagens de programação."},
-        .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", DIALOGUE_FONT_SIZE),
+        .text_font = dialogue_text_font,
         .on_frame = {NONE},
         .text_color = {255, 255, 255, 255},
         .char_count = 0,
@@ -838,7 +876,7 @@ int main(int argc, char* argv[]) {
     
     Text cutscene_2 = {
         .writings = {"Porém, com os avanços tecnológicos, surgiu dependência e abstração na vida dos programadores."},
-        .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", DIALOGUE_FONT_SIZE),
+        .text_font = dialogue_text_font,
         .on_frame = {NONE},
         .text_color = {255, 255, 255, 255},
         .char_count = 0,
@@ -851,7 +889,7 @@ int main(int argc, char* argv[]) {
 
     Text cutscene_3 = {
         .writings = {"No fim, restaram mínimos usuários de linguagens de baixo nível, o mundo fora tomado pela praticidade. Mas ainda havia resistência."},
-        .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", DIALOGUE_FONT_SIZE),
+        .text_font = dialogue_text_font,
         .on_frame = {NONE},
         .text_color = {255, 255, 255, 255},
         .char_count = 0,
@@ -864,7 +902,7 @@ int main(int argc, char* argv[]) {
 
     Text cutscene_4 = {
         .writings = {"Para trazer a luz para o mundo novamente, um dos heróis restantes lutará contra todas as abstrações e seu maior inimigo..."},
-        .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", DIALOGUE_FONT_SIZE),
+        .text_font = dialogue_text_font,
         .on_frame = {NONE},
         .text_color = {255, 255, 255, 255},
         .char_count = 0,
@@ -877,7 +915,7 @@ int main(int argc, char* argv[]) {
 
     Text fight_start_txt = {
         .writings = {"* Mr. Python bloqueia o seu caminho."},
-        .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", DIALOGUE_FONT_SIZE),
+        .text_font = dialogue_text_font,
         .on_frame = {NONE},
         .text_color = {255, 255, 255, 255},
         .char_count = 0,
@@ -890,7 +928,7 @@ int main(int argc, char* argv[]) {
 
     Text fight_generic_txt = {
         .writings = {"* Mr. Python aguarda o seu próximo movimento."},
-        .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", DIALOGUE_FONT_SIZE),
+        .text_font = dialogue_text_font,
         .on_frame = {NONE},
         .text_color = {255, 255, 255, 255},
         .char_count = 0,
@@ -903,7 +941,7 @@ int main(int argc, char* argv[]) {
 
     Text fight_leave_txt = {
         .writings = {"* Esta é uma batalha em que você não cogita fugir."},
-        .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", DIALOGUE_FONT_SIZE),
+        .text_font = dialogue_text_font,
         .on_frame = {NONE},
         .text_color = {255, 255, 255, 255},
         .char_count = 0,
@@ -916,7 +954,7 @@ int main(int argc, char* argv[]) {
 
     Text fight_spare_txt = {
         .writings = {"* A palavra 'perdão' não existe no seu vocabulário neste momento."},
-        .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", DIALOGUE_FONT_SIZE),
+        .text_font = dialogue_text_font,
         .on_frame = {NONE},
         .text_color = {255, 255, 255, 255},
         .char_count = 0,
@@ -929,7 +967,7 @@ int main(int argc, char* argv[]) {
 
     Text fight_act_txt = {
         .writings = {"* Mr. Python - 2 ATQ, ? DEF |* O seu pior inimigo."},
-        .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", DIALOGUE_FONT_SIZE),
+        .text_font = dialogue_text_font,
         .on_frame = {NONE},
         .text_color = {255, 255, 255, 255},
         .char_count = 0,
@@ -942,7 +980,7 @@ int main(int argc, char* argv[]) {
 
     Text insult_txt = {
         .writings = {"* Você insulta a tipagem dinâmica. |* Mr. Python aumenta a sua própria variável de força."},
-        .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", DIALOGUE_FONT_SIZE),
+        .text_font = dialogue_text_font,
         .on_frame = {NONE},
         .text_color = {255, 255, 255, 255},
         .char_count = 0,
@@ -955,7 +993,7 @@ int main(int argc, char* argv[]) {
 
     Text insult_generic_txt = {
         .writings = {"* Você lembra do último turno... |* Você decide ficar calado."},
-        .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", DIALOGUE_FONT_SIZE),
+        .text_font = dialogue_text_font,
         .on_frame = {NONE},
         .text_color = {255, 255, 255, 255},
         .char_count = 0,
@@ -968,7 +1006,7 @@ int main(int argc, char* argv[]) {
 
     Text explain_txt = {
         .writings = {"* Você explica ponteiros para Mr. Python. |* Ele enfraquece ao ouvir algo tão rudimentar."},
-        .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", DIALOGUE_FONT_SIZE),
+        .text_font = dialogue_text_font,
         .on_frame = {NONE},
         .text_color = {255, 255, 255, 255},
         .char_count = 0,
@@ -981,7 +1019,7 @@ int main(int argc, char* argv[]) {
 
     Text explain_generic_txt = {
         .writings = {"* Você tenta explicar algo de baixo nível, mas Mr. Python dá de costas. |* Que rude!"},
-        .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", DIALOGUE_FONT_SIZE),
+        .text_font = dialogue_text_font,
         .on_frame = {NONE},
         .text_color = {255, 255, 255, 255},
         .char_count = 0,
@@ -994,7 +1032,7 @@ int main(int argc, char* argv[]) {
 
     Text picanha_txt = {
         .writings = {"* Você comeu PICANHA. |* Você recuperou 20 de HP!"},
-        .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", DIALOGUE_FONT_SIZE),
+        .text_font = dialogue_text_font,
         .on_frame = {NONE},
         .text_color = {255, 255, 255, 255},
         .char_count = 0,
@@ -1007,7 +1045,7 @@ int main(int argc, char* argv[]) {
 
     Text no_food_txt = {
         .writings = {"* Não sobrou mais nada comestível em seus bolsos."},
-        .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", DIALOGUE_FONT_SIZE),
+        .text_font = dialogue_text_font,
         .on_frame = {NONE},
         .text_color = {255, 255, 255, 255},
         .char_count = 0,
@@ -1020,7 +1058,7 @@ int main(int argc, char* argv[]) {
 
     Text bubble_speech_1 = {
         .writings = {"A abstração já venceu há muito tempo."},
-        .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", 14),
+        .text_font = bubble_text_font,
         .on_frame = {NONE},
         .text_color = {0, 0, 0, 255},
         .char_count = 0,
@@ -1033,7 +1071,7 @@ int main(int argc, char* argv[]) {
 
     Text bubble_speech_2 = {
         .writings = {"As linguagens de baixo nível já estão ultrapassadas."},
-        .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", 14),
+        .text_font = bubble_text_font,
         .on_frame = {NONE},
         .text_color = {0, 0, 0, 255},
         .char_count = 0,
@@ -1046,7 +1084,7 @@ int main(int argc, char* argv[]) {
 
     Text bubble_speech_3 = {
         .writings = {"Te darei um final digno."},
-        .text_font = TTF_OpenFont("assets/fonts/PixelOperator-Bold.ttf", 14),
+        .text_font = bubble_text_font,
         .on_frame = {NONE},
         .text_color = {0, 0, 0, 255},
         .char_count = 0,
@@ -1082,53 +1120,62 @@ int main(int argc, char* argv[]) {
     CutsceneFrame cutscene[] = {frame_1, frame_2, frame_3, frame_4};
     int cutscene_amount = sizeof(cutscene) / sizeof(cutscene[0]);
 
+    SDL_Rect debug_buttons[] = {{25, 25, 25, 25}, {75, 25, 25, 25}, {125, 25, 25, 25}, {175, 25, 25, 25}, {225, 25, 25, 25}, {275, 25, 25, 25}};
+    SDL_Rect animated_box;
+
     Uint32 last_ticks = SDL_GetTicks();
     double anim_timer = 0.0;
     const double anim_interval = 0.12;
 
     double cloud_timer = 0.0;
-    bool interaction_request = false;
-    bool ambience_begun = false;
-    bool meneghetti_arrived = false;
-    bool python_dialogue_finished = false;
 
     int last_health = meneghetti.health;
 
-    // VARIÁVEIS DE CONTROLE
+    // VARIÁVEIS DE CONTROLE:
+    bool delay_started = false; // Controla o estado da animação de chegada do player.
+    bool battle_ready = false; // Indica se a animação de entrada de batalha terminou de acontecer.
+    bool on_dialogue = false; // Cena de batalha, indica se um diálogo está passando na caixa.
+    bool first_dialogue = false; // Serve para indicar se o diálog de entrada da batalha deve passar.
+    bool animated_box_inited = false; // Indica se a caixa animada da batalha foi inicializada em relação à caixa padrão.
+    bool has_played_slash = false; // Indicador de áudio para evitar repetição de slash.wav, em batalha.
+    bool has_played_hit = false; // Indicador de áudio para evitar repetição de enemy_hit.wav, em batalha.
+    bool soul_ivulnerable = false; // Indica se a alma está ou não ivulnerável.
+    bool enemy_attack_selected = false; // Indica a necessidade de escolher o ataque inimigo no início do turno.
+    bool tried_to_attack = false; // Indica se houve tentativa de ataque no teste de acurácia da batalha.
+    bool should_expand_back = false; // Aponta se a caixa animada da batalha deve voltar ao seu estado original.
+    bool first_insult = true; // Controla a quantidade de ações "Insulto" aplicadas pelo player.
+    bool first_explain = true; // Controla a quantidade de ações "Explicar" aplicadas pelo player.
+    bool has_played_eat = false; // Indicador de áudio para evitar repetição de heal_sound.wav, em batalha.
+    bool has_played_break = false; // Indicador de áudio para evitar repetição de soul_shatter.wav, em batalha.
+    bool python_dead = false; // Define se o Mr. Python foi morto ou não. Trigger para tela final.
+    bool interaction_request = false; // Indica se foi requisitada uma interação via tecla E no mundo aberto.
+    bool ambience_begun = false; // Define se a música ambiente começou no mundo aberto.
+    bool meneghetti_arrived = false; // Indica a chegada do player na posição necessária na intro do mundo aberto.
+    bool python_dialogue_finished = false; // Aponta se o player finalizou seu primeiro diálogo com o Mr. Python. Trigger para a batalha.
+    bool debug_mode = false; // Indica o estado do modo de debug.
+
+    double arrival_timer = 0.0;
+    double car_animation_timer = 0.0;
+    double senoidal_timer = 0.0;
+    double counter = 0.0;
+    double animated_shrink_timer = 0.0;
+    double blink_timer = 0.0;
+    double ivulnerability_counter = 0.0;
+    double turn_timer = 0.0;
+    double death_counter  = 0.0;
+
+    float parallax_factor = 0.5f;
+
     int food_amount = 4;
     int selected_button = FIGHT;
     int turn = CHOICE_TURN;
     int menu_pos = 0;
     int base_py_damage = 2;
     int current_py_damage = base_py_damage;
-    double senoidal_timer = 0.0;
-    double counter = 0.0;
-    bool battle_ready = false;
-    bool on_dialogue = false;
-    bool first_dialogue = false;
-    SDL_Rect animated_box;
-    bool animated_box_inited = false;
-    double animated_shrink_timer = 0.0;
-    const double animated_shrink_duration = 0.8;
-    bool enemy_attack_selected = false;
-    bool tried_to_attack = false;
-    double blink_timer = 0.0;
-    bool has_played_slash = false;
-    bool has_played_hit = false;
-    bool soul_ivulnerable = false;
-    double ivulnerability_counter = 0.0;
-    double turn_timer = 0.0;
-    bool should_expand_back = false;
-    bool first_insult = true;
-    bool first_explain = true;
-    bool has_played_eat = false;
-    double death_counter  = 0.0;
-    bool has_played_break = false;
-    bool python_dead = false;
     int death_count = 0;
 
     if (game_state == OPEN_WORLD) {
-        player_state = IDLE;
+        meneghetti_arrived = true;
     }
     
     while (running) {
@@ -1145,8 +1192,57 @@ int main(int argc, char* argv[]) {
                     if (player_state == MOVABLE)
                         interaction_request = true;
                     break;
+                case SDL_SCANCODE_F7:
+                    if (debug_mode) {
+                        debug_mode = false;
+                    }
+                    else {
+                        debug_mode = true;
+                    }
                 default:
                     break;
+                }
+                break;
+            case SDL_MOUSEBUTTONDOWN:
+                if (event.button.button ==  SDL_BUTTON_LEFT && debug_mode) {
+                    SDL_Rect click = {event.button.x, event.button.y, 1, 1};
+
+                    if (check_collision(&click, debug_buttons, 6)) {
+                        for (int i = 0; i < 6; i++) {
+                            if (rects_intersect(&click, &debug_buttons[i], NULL)) {
+                                switch (i)
+                                {
+                                case 0:
+                                    game_state = CUTSCENE;
+                                    player_state = IDLE;
+                                    break;
+                                case 1:
+                                    game_state = TITLE_SCREEN;
+                                    player_state = IDLE;
+                                    break;
+                                case 2:
+                                    game_state = OPEN_WORLD;
+                                    player_state = MOVABLE;
+                                    meneghetti_arrived = true;
+                                    break;
+                                case 3:
+                                    game_state = BATTLE_SCREEN;
+                                    player_state = IN_BATTLE;
+                                    break;
+                                case 4:
+                                    game_state = DEATH_SCREEN;
+                                    player_state = DEAD;
+                                    break;
+                                case 5:
+                                    game_state = FINAL_SCREEN;
+                                    player_state = IDLE;
+                                    break;
+                                default:
+                                    break;
+                                }
+                            }
+                        }
+                    }
                 }
             default:
                 break;
@@ -1256,6 +1352,7 @@ int main(int argc, char* argv[]) {
             const Uint8 *keys = meneghetti.keystate ? meneghetti.keystate : SDL_GetKeyboardState(NULL);
             static bool sound_has_played = false;
 
+            SDL_SetRenderDrawColor(game.renderer, 0, 0, 0, 255);
             SDL_RenderClear(game.renderer);
             SDL_RenderCopy(game.renderer, title.current, NULL, &title.collision);
 
@@ -1541,7 +1638,7 @@ int main(int argc, char* argv[]) {
 
             static char x_number[3];
             snprintf(x_number, sizeof(x_number), "%dx", food_amount);
-            food_amount_text.current = create_txt(game.renderer, x_number, battle_text_font, battle_text_color);
+            food_amount_text.current = create_text(game.renderer, x_number, battle_text_font, battle_text_color);
 
             if (!animated_box_inited) {
                 animated_box = base_box;
@@ -1608,7 +1705,7 @@ int main(int argc, char* argv[]) {
                     char hp_string[6];
                     snprintf(hp_string, sizeof(hp_string), "%02d/20", meneghetti.health);
 
-                    battle_hp_amount.current = create_txt(game.renderer, hp_string, battle_text_font, battle_text_color);
+                    battle_hp_amount.current = create_text(game.renderer, hp_string, battle_text_font, battle_text_color);
 
                     last_health = meneghetti.health;
                 }
@@ -1901,9 +1998,9 @@ int main(int argc, char* argv[]) {
 
                         if (!should_expand_back && animated_box.w > target_w) {
                             animated_shrink_timer += dt;
-                            if (animated_shrink_timer > animated_shrink_duration) animated_shrink_timer = animated_shrink_duration;
+                            if (animated_shrink_timer > 0.8) animated_shrink_timer = 0.8;
 
-                            double t = animated_shrink_timer / animated_shrink_duration;
+                            double t = animated_shrink_timer / 0.8;
                             t = 1.0 - pow(1.0 - t, 3.0);
 
                             double start_w = (double)base_box.w;
@@ -1953,16 +2050,16 @@ int main(int argc, char* argv[]) {
                                 }
 
                                 if (turn_timer >= 0.5) {
-                                    python_attacks(game.renderer, &soul, animated_box, &meneghetti.health, current_py_damage, enemy_attack, &soul_ivulnerable, python_props, dt, turn_timer, false);
+                                    python_attacks(game.renderer, &soul, animated_box, &meneghetti.health, current_py_damage, enemy_attack, &soul_ivulnerable, python_props, dt, turn_timer, battle_sounds, false);
                                     switch (random_dialogue) {
                                         case 1: 
-                                            create_dialogue(&meneghetti, game.renderer, &bubble_speech_1, &player_state, &game_state, dt, NULL, NULL, &anim_timer, dialogue_voices, true);
+                                            create_dialogue(&meneghetti, game.renderer, &bubble_speech_1, &player_state, &game_state, dt, NULL, NULL, &anim_timer, dialogue_voices, &bubble_speech);
                                             break;
                                         case 2:
-                                            create_dialogue(&meneghetti, game.renderer, &bubble_speech_2, &player_state, &game_state, dt, NULL, NULL, &anim_timer, dialogue_voices, true);
+                                            create_dialogue(&meneghetti, game.renderer, &bubble_speech_2, &player_state, &game_state, dt, NULL, NULL, &anim_timer, dialogue_voices, &bubble_speech);
                                             break;
                                         case 3:
-                                            create_dialogue(&meneghetti, game.renderer, &bubble_speech_3, &player_state, &game_state, dt, NULL, NULL, &anim_timer, dialogue_voices, true);
+                                            create_dialogue(&meneghetti, game.renderer, &bubble_speech_3, &player_state, &game_state, dt, NULL, NULL, &anim_timer, dialogue_voices, &bubble_speech);
                                             break;
                                         default:
                                             break;
@@ -1970,7 +2067,7 @@ int main(int argc, char* argv[]) {
                                 }
                             }
                             else {
-                                python_attacks(game.renderer, &soul, animated_box, &meneghetti.health, current_py_damage, enemy_attack, &soul_ivulnerable, python_props, dt, turn_timer, true);
+                                python_attacks(game.renderer, &soul, animated_box, &meneghetti.health, current_py_damage, enemy_attack, &soul_ivulnerable, python_props, dt, turn_timer, battle_sounds, true);
                                 python_props[2][0].current = python_mother_animation.frames[0];
                                 should_expand_back = true;
                                 animated_shrink_timer = 0.0;
@@ -1979,9 +2076,9 @@ int main(int argc, char* argv[]) {
                         }
                         else if (should_expand_back) {
                             animated_shrink_timer += dt;
-                            if (animated_shrink_timer > animated_shrink_duration) animated_shrink_timer = animated_shrink_duration;
+                            if (animated_shrink_timer > 0.8) animated_shrink_timer = 0.8;
 
-                            double t = animated_shrink_timer / animated_shrink_duration;
+                            double t = animated_shrink_timer / 0.8;
                             t = 1.0 - pow(1.0 - t, 3.0);
 
                             double start_w = (double)base_box.h;
@@ -1994,7 +2091,7 @@ int main(int argc, char* argv[]) {
                             animated_box.y = base_box.y;
                             animated_box.h = base_box.h;
 
-                            if (animated_shrink_timer >= animated_shrink_duration) {
+                            if (animated_shrink_timer >= 0.8) {
                                 counter = 0.0;
                                 animated_shrink_timer = 0.0;
                                 should_expand_back = false;
@@ -2363,44 +2460,32 @@ int main(int argc, char* argv[]) {
                 first_explain = true;
                 has_played_eat = false;
 
-                python_attacks(game.renderer, &soul, animated_box, &meneghetti.health, current_py_damage, 0, &soul_ivulnerable, python_props, dt, turn_timer, true);
+                python_attacks(game.renderer, &soul, animated_box, &meneghetti.health, current_py_damage, 0, &soul_ivulnerable, python_props, dt, turn_timer, battle_sounds, true);
 
                 int attack_widths, attack_heights;
-                command_rain[0].current = create_texture(game.renderer, "assets/sprites/battle/if.png");
                 SDL_QueryTexture(command_rain[0].current, NULL, NULL, &attack_widths, &attack_heights);
                 command_rain[0].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
-                command_rain[1].current = create_texture(game.renderer, "assets/sprites/battle/else.png");
                 SDL_QueryTexture(command_rain[1].current, NULL, NULL, &attack_widths, &attack_heights);
                 command_rain[1].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
-                command_rain[2].current = create_texture(game.renderer, "assets/sprites/battle/elif.png");
                 SDL_QueryTexture(command_rain[2].current, NULL, NULL, &attack_widths, &attack_heights);
                 command_rain[2].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
-                command_rain[3].current = create_texture(game.renderer, "assets/sprites/battle/input.png");
                 SDL_QueryTexture(command_rain[3].current, NULL, NULL, &attack_widths, &attack_heights);
                 command_rain[3].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
-                command_rain[4].current = create_texture(game.renderer, "assets/sprites/battle/print.png");
                 SDL_QueryTexture(command_rain[4].current, NULL, NULL, &attack_widths, &attack_heights);
                 command_rain[4].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
-                command_rain[5].current = create_texture(game.renderer, "assets/sprites/battle/in.png");
                 SDL_QueryTexture(command_rain[5].current, NULL, NULL, &attack_widths, &attack_heights);
                 command_rain[5].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
 
-                parenthesis_enclosure[0].current = create_texture(game.renderer, "assets/sprites/battle/brackets-1.png");
                 SDL_QueryTexture(parenthesis_enclosure[0].current, NULL, NULL, &attack_widths, &attack_heights);
                 parenthesis_enclosure[0].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
-                parenthesis_enclosure[1].current = create_texture(game.renderer, "assets/sprites/battle/brackets-2.png");
                 SDL_QueryTexture(parenthesis_enclosure[1].current, NULL, NULL, &attack_widths, &attack_heights);
                 parenthesis_enclosure[1].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
-                parenthesis_enclosure[2].current = create_texture(game.renderer, "assets/sprites/battle/key-1.png");
                 SDL_QueryTexture(parenthesis_enclosure[2].current, NULL, NULL, &attack_widths, &attack_heights);
                 parenthesis_enclosure[2].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
-                parenthesis_enclosure[3].current = create_texture(game.renderer, "assets/sprites/battle/key-2.png");
                 SDL_QueryTexture(parenthesis_enclosure[3].current, NULL, NULL, &attack_widths, &attack_heights);
                 parenthesis_enclosure[3].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
-                parenthesis_enclosure[4].current = create_texture(game.renderer, "assets/sprites/battle/parenthesis-1.png");
                 SDL_QueryTexture(parenthesis_enclosure[4].current, NULL, NULL, &attack_widths, &attack_heights);
                 parenthesis_enclosure[4].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
-                parenthesis_enclosure[5].current = create_texture(game.renderer, "assets/sprites/battle/parenthesis-2.png");
                 SDL_QueryTexture(parenthesis_enclosure[5].current, NULL, NULL, &attack_widths, &attack_heights);
                 parenthesis_enclosure[5].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
 
@@ -2532,17 +2617,25 @@ int main(int argc, char* argv[]) {
             }
         }
 
+        if (debug_mode) {
+            SDL_SetRenderDrawColor(game.renderer, 255, 255, 255, 255);
+            SDL_RenderFillRects(game.renderer, debug_buttons, 6);
+        }
+
         SDL_RenderPresent(game.renderer);
 
         SDL_Delay(1);
     }
 
     for (int i = 0; i < DIR_COUNT; i++) {
-        for (int n = 0; n < anim_pack[i].count; n++) {
-            object_cleanup(anim_pack[i].frames[n]);
-        }
         free(anim_pack[i].frames);
+        free(anim_pack_reflex[i].frames);
+        free(mr_python_animation[i].frames);
     }
+    for (int i = 0; i < 3; i++) {
+        free(meneghetti_dialogue[i].frames);
+    }
+
     game_cleanup(&game, EXIT_SUCCESS);
     return 0;
 }
@@ -2601,45 +2694,52 @@ bool sdl_initialize(Game *game) {
     return false;
 }
 
-void game_cleanup(Game *game, int exit_status) {
-    Mix_HaltMusic();
-    Mix_HaltChannel(-1);
-
-    Mix_CloseAudio();
-
-    SDL_DestroyRenderer(game->renderer);
-    SDL_DestroyWindow(game->window);
-
-    TTF_Quit();
-    Mix_Quit();
-    IMG_Quit();
-    SDL_Quit();
-
-    exit(exit_status);
-}
-
-void object_cleanup(SDL_Texture *obj) {
-    SDL_DestroyTexture(obj);
-}
-
-SDL_Texture *create_texture(SDL_Renderer *render, const char *dir) {
-    SDL_Surface *surface = IMG_Load(dir);
+SDL_Texture* create_texture(SDL_Renderer *render, const char *dir) {
+    SDL_Surface* surface = IMG_Load(dir);
     if (!surface) {
-        fprintf(stderr, "Error loading image '%s': '%s'\n", dir, IMG_GetError());
+        fprintf(stderr, "Error loading image '%s': %s\n", dir, IMG_GetError());
         return NULL;
     }
 
     SDL_Texture *texture = SDL_CreateTextureFromSurface(render, surface);
     if (!texture) {
-        fprintf(stderr, "Error creating texture: '%s'", SDL_GetError());
+        fprintf(stderr, "Error creating texture: %s", SDL_GetError());
         SDL_FreeSurface(surface);
         return NULL;
     }
+
     SDL_FreeSurface(surface);
+    track_texture(texture);
     return texture;
 }
 
-SDL_Texture *create_txt(SDL_Renderer *render, const char *utf8_text, TTF_Font *font, SDL_Color color) {
+
+Mix_Chunk* create_chunk(const char *dir, int volume) {
+    Mix_Chunk* chunk = Mix_LoadWAV(dir);
+
+    if (!chunk) {
+        fprintf(stderr, "Error loading chunk %s: %s", dir, Mix_GetError());
+        return NULL;
+    }
+
+    Mix_VolumeChunk(chunk, volume);
+    track_chunk(chunk);
+    return chunk;
+}
+
+TTF_Font* create_font(const char *dir, int size) {
+    TTF_Font* font = TTF_OpenFont(dir, size);
+
+    if (!font) {
+        fprintf(stderr, "Error loading font %s: %s", dir, TTF_GetError());
+        return NULL;
+    }
+
+    track_font(font);
+    return font;
+}
+
+SDL_Texture* create_text(SDL_Renderer *render, const char *utf8_text, TTF_Font *font, SDL_Color color) {
     if (!utf8_text || !utf8_text[0]) return NULL;
 
     SDL_Surface* surface = TTF_RenderUTF8_Solid(font, utf8_text, color);
@@ -2656,8 +2756,8 @@ SDL_Texture *create_txt(SDL_Renderer *render, const char *utf8_text, TTF_Font *f
     }
 
     SDL_FreeSurface(surface);
+    track_texture(texture);
     return texture;
-
 }
 
 SDL_Texture *animate_sprite(Animation *anim, double dt, double cooldown, AnimState *state, bool blink) {
@@ -2694,11 +2794,12 @@ SDL_Texture *animate_sprite(Animation *anim, double dt, double cooldown, AnimSta
 
 }
 
-void create_dialogue(Character *player, SDL_Renderer *render, Text *text, int *player_state, int *game_state, double dt, Animation *meneghetti_face, Animation *python_face, double *anim_timer, Mix_Chunk **sound, bool bubble) {
+void create_dialogue(Character *player, SDL_Renderer *render, Text *text, int *player_state, int *game_state, double dt, Animation *meneghetti_face, Animation *python_face, double *anim_timer, Mix_Chunk **sound, Prop *bubble_speech) {
     const Uint8 *keys = player->keystate ? player->keystate : SDL_GetKeyboardState(NULL);
     
     bool has_meneghetti = (meneghetti_face != NULL);
     bool has_python = (python_face != NULL);
+    bool bubble;
     
     static double anim_cooldown = 0.2;
 
@@ -2723,10 +2824,13 @@ void create_dialogue(Character *player, SDL_Renderer *render, Text *text, int *p
     const double timer_delay = 0.04;
     
     SDL_Rect dialogue_box = {0, 0, 0, 0};
-    Prop bubble_speech = {
-        .current = create_texture(render, "assets/sprites/battle/text-bubble.png"),
-        .collision = dialogue_box
-    };
+    if (bubble_speech) {
+        bubble_speech->collision = dialogue_box;
+        bubble = true;
+    }
+    else {
+        bubble = false;
+    }
     switch(*game_state) {
         case CUTSCENE:
             dialogue_box = (SDL_Rect){20, SCREEN_HEIGHT - 200, SCREEN_WIDTH - 40, 180};
@@ -2742,7 +2846,7 @@ void create_dialogue(Character *player, SDL_Renderer *render, Text *text, int *p
         case BATTLE_SCREEN:
             if (bubble) {
                 int w, h;
-                SDL_QueryTexture(bubble_speech.current, NULL, NULL, &w, &h);
+                SDL_QueryTexture(bubble_speech->current, NULL, NULL, &w, &h);
                 dialogue_box = (SDL_Rect){380, 40, w * 1.5, h * 1.5};
             }
             else {
@@ -2761,7 +2865,7 @@ void create_dialogue(Character *player, SDL_Renderer *render, Text *text, int *p
         SDL_RenderFillRect(render, &dialogue_box);
     }
     if (bubble) {
-        SDL_RenderCopy(render, bubble_speech.current, NULL, &dialogue_box);
+        SDL_RenderCopy(render, bubble_speech->current, NULL, &dialogue_box);
     }
 
     // BORDAS:
@@ -2801,7 +2905,7 @@ void create_dialogue(Character *player, SDL_Renderer *render, Text *text, int *p
             while (current[text->cur_byte] != '\0' && text->char_count < MAX_DIALOGUE_CHAR) {
                 char utf8_buffer[5];
                 int n = utf8_copy_char(&current[text->cur_byte], utf8_buffer);
-                SDL_Texture* t = create_txt(render, utf8_buffer, text->text_font, text->text_color);
+                SDL_Texture* t = create_text(render, utf8_buffer, text->text_font, text->text_color);
                 if (t) {
                     text->chars[text->char_count] = t;
                     strcpy(text->chars_string[text->char_count], utf8_buffer);
@@ -2822,11 +2926,11 @@ void create_dialogue(Character *player, SDL_Renderer *render, Text *text, int *p
                 if (text->char_count < MAX_DIALOGUE_CHAR) {
                     char utf8_buffer[5];
                     int n = utf8_copy_char(&current[text->cur_byte], utf8_buffer);
-                    SDL_Texture* t = create_txt(render, utf8_buffer, text->text_font, text->text_color);
+                    SDL_Texture* t = create_text(render, utf8_buffer, text->text_font, text->text_color);
                     if (t) {
                         if (sound && sfx_timer >= sfx_cooldown) {
                             int speaker = text->on_frame[text->cur_str];
-                            Mix_Chunk* chunk =  NULL;
+                            Mix_Chunk* chunk = NULL;
                             
                             if (speaker == MENEGHETTI || speaker == MENEGHETTI_ANGRY || speaker ==  MENEGHETTI_SAD) {
                                 chunk = sound[0];
@@ -3540,7 +3644,7 @@ int choice(int count, ...) {
 }
 
 // ATAQUES DO MR. PYTHON
-void python_attacks(SDL_Renderer *render, Prop *soul, SDL_Rect battle_box, int *player_health, int damage, int attack_index, bool *ivulnerable, Projectile **props, double dt, double turn_timer, bool clear) {
+void python_attacks(SDL_Renderer *render, Prop *soul, SDL_Rect battle_box, int *player_health, int damage, int attack_index, bool *ivulnerable, Projectile **props, double dt, double turn_timer, Mix_Chunk **sound, bool clear) {
     static double spawn_timer = 0.0;
     static int objects_spawned = 0;
     static bool attack_active = false;
@@ -3555,13 +3659,13 @@ void python_attacks(SDL_Renderer *render, Prop *soul, SDL_Rect battle_box, int *
 
     static int alpha_counter = 0;
 
-    Mix_Chunk* hit_sound = Mix_LoadWAV("assets/sounds/sound_effects/battle-sounds/damage_taken.wav");
-    Mix_Chunk* appear_sound = Mix_LoadWAV("assets/sounds/sound_effects/battle-sounds/object_appears.wav");
-    Mix_Chunk* born_sound = Mix_LoadWAV("assets/sounds/sound_effects/battle-sounds/python_ejects.wav");
-    Mix_Chunk* slam_sound = Mix_LoadWAV("assets/sounds/sound_effects/battle-sounds/slam.wav");
-    Mix_Chunk* strike_sound = Mix_LoadWAV("assets/sounds/sound_effects/battle-sounds/strike_sound.wav");
-
     static bool played_appear_sound = false;
+
+    Mix_Chunk* hit_sound = sound[0];
+    Mix_Chunk* appear_sound = sound[1];
+    Mix_Chunk* born_sound = sound[2];
+    Mix_Chunk* slam_sound = sound[3];
+    Mix_Chunk* strike_sound = sound[4];
 
     if (!clear) {    
         switch(attack_index) {
@@ -3872,4 +3976,123 @@ void python_attacks(SDL_Renderer *render, Prop *soul, SDL_Rect battle_box, int *
         }
     }
 
+}
+
+static void track_texture(SDL_Texture *texture) {
+    if (!texture || already_tracked_texture(texture)) {
+        return;
+    }
+
+    if (guarded_textures_count >= guarded_textures_capacity) {
+        guarded_textures_capacity = guarded_textures_capacity ? guarded_textures_capacity * 2 : 64;
+        guarded_textures = realloc(guarded_textures, guarded_textures_capacity * sizeof(*guarded_textures));
+    }
+
+    guarded_textures[guarded_textures_count++] = texture;
+}
+
+static bool already_tracked_texture(SDL_Texture *texture) {
+    for (int i = 0; i < guarded_textures_count; i++) {
+        if (guarded_textures[i] == texture) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static void track_chunk(Mix_Chunk *chunk) {
+    if (!chunk || already_tracked_chunk(chunk)) {
+        return;
+    }
+
+    if (guarded_chunks_count >= guarded_chunks_capacity) {
+        guarded_chunks_capacity = guarded_chunks_capacity ? guarded_chunks_capacity * 2 : 64;
+        guarded_chunks = realloc(guarded_chunks, guarded_chunks_capacity * sizeof(*guarded_chunks));
+    }
+
+    guarded_chunks[guarded_chunks_count++] = chunk;
+}
+
+static bool already_tracked_chunk(Mix_Chunk *chunk) {
+    for (int i = 0; i < guarded_chunks_count; i++) {
+        if (guarded_chunks[i] == chunk) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static void track_font(TTF_Font *font) {
+    if (!font || already_tracked_font(font)) {
+        return;
+    }
+
+    if (guarded_fonts_count >= guarded_fonts_capacity) {
+        guarded_fonts_capacity = guarded_fonts_capacity ? guarded_fonts_capacity * 2 : 32;
+        guarded_fonts = realloc(guarded_fonts, guarded_fonts_capacity * sizeof(*guarded_fonts));
+    }
+
+    guarded_fonts[guarded_fonts_count++] = font;
+}
+
+static bool already_tracked_font(TTF_Font *font) {
+    for (int i = 0; i < guarded_fonts_count; i++) {
+        if (guarded_fonts[i] == font) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void game_cleanup(Game *game, int exit_status) {
+    Mix_HaltMusic();
+    
+    for (int i = -1; i <= MIX_CHANNELS; i++) {
+        Mix_HaltChannel(i);
+    }
+
+    Mix_CloseAudio();
+
+    clean_tracked_resources();
+    SDL_DestroyRenderer(game->renderer);
+    SDL_DestroyWindow(game->window);
+
+    TTF_Quit();
+    Mix_Quit();
+    IMG_Quit();
+    SDL_Quit();
+
+    exit(exit_status);
+}
+
+void clean_tracked_resources(void) {
+    for (int i = 0; i < guarded_textures_count; i++) {
+        if (guarded_textures[i]) {
+            SDL_DestroyTexture(guarded_textures[i]);
+        }
+    }
+    free(guarded_textures);
+    guarded_textures = NULL;
+    guarded_textures_count = guarded_textures_capacity = 0;
+
+    for (int i = 0; i < guarded_chunks_count; i++) {
+        if (guarded_chunks[i]) {
+            Mix_FreeChunk(guarded_chunks[i]);
+        }
+    }
+    free(guarded_chunks);
+    guarded_chunks = NULL;
+    guarded_chunks_count = guarded_chunks_capacity = 0;
+
+    for (int i = 0; i < guarded_fonts_count; i++) {
+        if (guarded_fonts[i]) {
+            TTF_CloseFont(guarded_fonts[i]);
+        }
+    }
+    free(guarded_fonts);
+    guarded_fonts = NULL;
+    guarded_fonts_count = guarded_fonts_capacity = 0;
 }
