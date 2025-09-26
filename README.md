@@ -37,11 +37,11 @@ Project is: _complete_.
 
 ## 📸 Screenshots
 
-| Tela Inicial | Meneghetti en la Playa |
+| Title screen | Meneghetti en la Playa |
 |--------------|-------------------------|
 | ![TITLE](assets/screenshots/title.png) | ![MENEGHETTI_EN_LA_PLAYA](assets/screenshots/meneghetti_en_la_playa.png) |
 
-| Diálogo no Jogo | Mr. Python (Animação) |
+| In-game dialogue | Mr. Python (Animation) |
 |-----------------|------------------------|
 | ![DIALOGUE](assets/screenshots/dialogue.png) | ![MR_PYTHON](assets/screenshots/mr_python.gif) |
 
