@@ -109,13 +109,19 @@ You can execute the code after that.
 
 __Commands:__
 
-> sudo apt update && sudo apt install -y build-essential cmake pkg-config libsdl2-dev libsdl2-image-dev libsdl2-ttf-dev libsdl2-mixer-dev
+```
+sudo apt update && sudo apt install -y build-essential cmake pkg-config libsdl2-dev libsdl2-image-dev libsdl2-ttf-dev libsdl2-mixer-dev
+```
 
 If you don't have GCC:
 
-> sudo apt update
+```
+sudo apt update
+```
 
-> sudo apt install gcc
+```
+sudo apt install gcc
+```
 
 <hr>
 
@@ -123,11 +129,15 @@ If you don't have GCC:
 
 __Fedora, Oracle, Rocky, etc.:__
 
-> sudo dnf install SDL2-devel gcc make cmake
+```
+sudo dnf install SDL2-devel gcc make cmake
+```
 
 __Arch:__
 
-> sudo pacman -S sdl2 gcc make cmake
+```
+sudo pacman -S sdl2 gcc make cmake
+```
 
 ## 🎮 Usage
 WASD to walk, E to interact, TAB to go back, ENTER to begin the game.
