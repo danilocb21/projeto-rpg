@@ -1,6 +1,6 @@
 <h1 align="center">C-Tale: Meneghetti VS Python</h1>
 <p align="center">
-  <img alt="Static Badge" src="https://img.shields.io/badge/In%20Progress-yellow?style=for-the-badge">
+  <img alt="Static Badge" src="https://img.shields.io/badge/COMPLETE-2ecc71?style=for-the-badge">
   <img alt="GitHub License" src="https://img.shields.io/github/license/danilocb21/projeto-rpg?style=for-the-badge&logo=github&color=purple">
   <img alt="Static Badge" src="https://img.shields.io/badge/Language-blue?style=for-the-badge&logo=c">
 </p>
@@ -19,47 +19,109 @@
 - [License](#license)
 
 ## 🔋 Project Status
-Project is: _in progress_.
+Project is: _complete_.
 
 ## 🗺️ Roadmap
-- [ ] 🎨 Sprites
-- [ ] 🏃 Character movement
-- [ ] 💬 NPC interaction
-- [ ] ⚔️ Battle system
-- [ ] 🎒 Items
-- [ ] 🚩 Ending sequence
+- [x] 🎨 Sprites
+- [x] 🏃 Character movement
+- [x] 💬 NPC interaction
+- [x] ⚔️ Battle system
+- [x] 🎒 Items
+- [x] 🚩 Ending sequence
+## 💡 Future Goals
+- [ ] 🌍 Multiple scenarios
+- [ ] ⚔️ Different battles
+- [ ] 🚂 Different game modes
+- [ ] 🪙 Different endings
+- [ ] 👾 Debug mode
 
 ## 📸 Screenshots
-![PLACEHOLDER](./img/placeholder.png)
+![PLACEHOLDER]
 
 ## 💾 Setup
-- __Windows:__ For this program to work, you will need a C/C++ compiler. We recommend [_MinGW_](https://sourceforge.net/projects/mingw/), which is the one we used. Keep your eyes on the said architeture, 32-bits version is needed.
-Install the compiler on the official page, run the executable, and download via MingGW Installation Manager the C compatibility.
-Then, you just need to open CMD/PowerShell, and type the makefile command on the downloaded repository root file.
+- __Windows:__
+
+ We recommend using [_MSYS2_](http://msys2.org/) with the MINGW64 toolchain (more stable and simple). Install it at the official website, then search for "MSYS2 MINGW64 in your search bar (the blue one).
+
+ Now, just execute the following commands in there:
 
 __Commands:__
 
-> mingw32-make run
+```
+# updates the MSYS2 system (may request to reopen the shell)
+pacman -Syu
+```
 
-Or (if you changed the mingw32-make.exe to make.exe, which makes it easier to type):
+If you get some error here, try:
 
-> make run
+```
+pacman -Syuu
+```
+
+Now, for the dependencies (if the terminal stops asking for a input, just hit Return):
+
+```
+pacman -S --needed base-devel mingw-w64-ucrt-x86_64-toolchain mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-pkg-config
+```
+
+Got any problems with package conflict in the last step? Try this line:
+
+```
+pacman -S --needed base-devel mingw-w64-ucrt-x86_64-toolchain mingw-w64-ucrt-x86_64-cmake
+```
+
+If everything's good so far, here goes the last step:
+
+```
+pacman -S mingw-w64-ucrt-x86_64-SDL2 mingw-w64-ucrt-x86_64-SDL2_image mingw-w64-ucrt-x86_64-SDL2_ttf mingw-w64-ucrt-x86_64-SDL2_mixer
+```
+
+Then, to build the program, go into the repo directory with your shell, and execute the following:
+
+```
+mkdir build
+cd build
+cmake ..
+make
+```
+
+The executable will be on the build file after that.
+
+> projeto-rpg\build\c_tale.exe
 
 <hr>
 
-- __Linux:__ First, install/update the SDL2 library on the console. Then, just compile the code with the makefile command, execute the .exe file, and have fun. (May be redundant, but you should also have GCC and Make support installed).
+- __Linux:__
+
+ First, install/update the SDL2 library on the console. Then, just build the program with the CMakefile command (same as Windows, the code just below), execute the main code, and have fun. (May be redundant, but you should also have GCC and CMake support installed).
+
+ ```
+(on repo directory):
+mkdir build
+cd build
+cmake ..
+make
+```
+
+You can execute the code after that.
+
+> projeto-rpg/build/c_tale
 
 __Commands:__
 
-> sudo apt update && sudo apt install -y libsdl2-dev libsdl2-image-dev pkg-config
+```
+sudo apt update && sudo apt install -y build-essential cmake pkg-config libsdl2-dev libsdl2-image-dev libsdl2-ttf-dev libsdl2-mixer-dev
+```
 
-If you don't have GCC and Make:
+If you don't have GCC:
 
-> sudo apt update
+```
+sudo apt update
+```
 
-> sudo apt install gcc
-
-> sudo apt install make
+```
+sudo apt install gcc
+```
 
 <hr>
 
@@ -67,16 +129,20 @@ If you don't have GCC and Make:
 
 __Fedora, Oracle, Rocky, etc.:__
 
-> sudo dnf install SDL2-devel gcc make
+```
+sudo dnf install SDL2-devel gcc make cmake
+```
 
 __Arch:__
 
-> sudo pacman -S sdl2 gcc make
+```
+sudo pacman -S sdl2 gcc make cmake
+```
 
 ## 🎮 Usage
-WASD to walk, Spacebar to interact.
+WASD to walk, E to interact, TAB to go back, ENTER to begin the game.
 
-Walk up to the NPC, press Space to interact, defeat it in battle mode, reach the final object.
+Walk up to the NPC, press E to interact, defeat it in battle mode, reach the final object.
 
 ## 🖋️ Authors
 [@danilocb21](https://github.com/danilocb21): main programmer.
