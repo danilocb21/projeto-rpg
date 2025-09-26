@@ -19,7 +19,7 @@
 - [License](#license)
 
 ## 🔋 Project Status
-Project is: _in progress_.
+Project is: _complete_.
 
 ## 🗺️ Roadmap
 - [x] 🎨 Sprites
@@ -39,17 +39,38 @@ Project is: _in progress_.
 ![PLACEHOLDER]
 
 ## 💾 Setup
-- __Windows:__ For this program to work, you will need a C/C++ compiler. We recommend [_MinGW_](https://sourceforge.net/projects/mingw/), which is the one we used. Keep your eyes on the said architeture, 32-bits version is needed.
-Install the compiler on the official page, run the executable, and download via MingGW Installation Manager the C compatibility.
-Then, you just need to open CMD/PowerShell, and type the makefile command on the downloaded repository root file.
+- __Windows:__ For this program to work, you will need a C/C++ compiler. We recommend [_MinGW_](https://sourceforge.net/projects/mingw/), which is the one we used. Keep your eyes on the said architeture, 64-bits version is needed.
+Install the compiler on the official page, run the executable, download via MingGW Installation Manager the C compatibility, and don't forget to add MinGW directory to PATH in Windows system variables.<br> Then, you need to install and open [_MSYS2_](https://www.msys2.org/) (64-bits, alright?) terminal. Once your MSYS2 is installed, just search "MSYS2 MSYS" up in your search bar. You'll need the one with that exact name (the purple one).<br> Now, just execute the following commands in there:
 
 __Commands:__
 
-> mingw32-make run
+```
+pacman -Syu
+```
 
-Or (if you changed the mingw32-make.exe to make.exe, which makes it easier to type):
+If you get some error here, try:
 
-> make run
+```
+pacman -Syuu
+```
+
+Now, for the dependencies (if the terminal stops asking for a input, just hit Return):
+
+```
+pacman -S --needed base-devel mingw-w64-ucrt-x86_64-toolchain mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-pkg-config
+```
+
+Got any problems with package conflict in the last step? Try this line:
+
+```
+pacman -S --needed base-devel mingw-w64-ucrt-x86_64-toolchain mingw-w64-ucrt-x86_64-cmake
+```
+
+If everything's good so far, here goes the last step:
+
+```
+pacman -S mingw-w64-ucrt-x86_64-SDL2 mingw-w64-ucrt-x86_64-SDL2_image mingw-w64-ucrt-x86_64-SDL2_ttf mingw-w64-ucrt-x86_64-SDL2_mixer
+```
 
 <hr>
 
@@ -57,15 +78,13 @@ Or (if you changed the mingw32-make.exe to make.exe, which makes it easier to ty
 
 __Commands:__
 
-> sudo apt update && sudo apt install -y libsdl2-dev libsdl2-image-dev pkg-config
+> sudo apt update && sudo apt install -y build-essential cmake pkg-config libsdl2-dev libsdl2-image-dev libsdl2-ttf-dev libsdl2-mixer-dev
 
-If you don't have GCC and Make:
+If you don't have GCC:
 
 > sudo apt update
 
 > sudo apt install gcc
-
-> sudo apt install make
 
 <hr>
 
