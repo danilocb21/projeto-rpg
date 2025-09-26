@@ -39,12 +39,16 @@ Project is: _complete_.
 ![PLACEHOLDER]
 
 ## 💾 Setup
-- __Windows:__ For this program to work, you will need a C/C++ compiler. We recommend [_MinGW_](https://sourceforge.net/projects/mingw/), which is the one we used. Keep your eyes on the said architeture, 64-bits version is needed.
-Install the compiler on the official page, run the executable, download via MingGW Installation Manager the C compatibility, and don't forget to add MinGW directory to PATH in Windows system variables.<br> Then, you need to install and open [_MSYS2_](https://www.msys2.org/) (64-bits, alright?) terminal. Once your MSYS2 is installed, just search "MSYS2 MSYS" up in your search bar. You'll need the one with that exact name (the purple one).<br> Now, just execute the following commands in there:
+- __Windows:__
+
+ We recommend using [_MSYS2_](http://msys2.org/) with the MINGW64 toolchain (more stable and simple). Install it at the official website, then search for "MSYS2 MINGW64 in your search bar (the blue one).
+
+ Now, just execute the following commands in there:
 
 __Commands:__
 
 ```
+# updates the MSYS2 system (may request to reopen the shell)
 pacman -Syu
 ```
 
@@ -72,9 +76,36 @@ If everything's good so far, here goes the last step:
 pacman -S mingw-w64-ucrt-x86_64-SDL2 mingw-w64-ucrt-x86_64-SDL2_image mingw-w64-ucrt-x86_64-SDL2_ttf mingw-w64-ucrt-x86_64-SDL2_mixer
 ```
 
+Then, to build the program, go into the repo directory with your shell, and execute the following:
+
+```
+mkdir build
+cd build
+cmake ..
+make
+```
+
+The executable will be on the build file after that.
+
+> projeto-rpg\build\c_tale.exe
+
 <hr>
 
-- __Linux:__ First, install/update the SDL2 library on the console. Then, just compile the code with the makefile command, execute the .exe file, and have fun. (May be redundant, but you should also have GCC and Make support installed).
+- __Linux:__
+
+ First, install/update the SDL2 library on the console. Then, just build the program with the CMakefile command (same as Windows, the code just below), execute the main code, and have fun. (May be redundant, but you should also have GCC and CMake support installed).
+
+ ```
+(on repo directory):
+mkdir build
+cd build
+cmake ..
+make
+```
+
+You can execute the code after that.
+
+> projeto-rpg/build/c_tale
 
 __Commands:__
 
@@ -92,16 +123,16 @@ If you don't have GCC:
 
 __Fedora, Oracle, Rocky, etc.:__
 
-> sudo dnf install SDL2-devel gcc make
+> sudo dnf install SDL2-devel gcc make cmake
 
 __Arch:__
 
-> sudo pacman -S sdl2 gcc make
+> sudo pacman -S sdl2 gcc make cmake
 
 ## 🎮 Usage
-WASD to walk, Spacebar to interact.
+WASD to walk, E to interact, TAB to go back, ENTER to begin the game.
 
-Walk up to the NPC, press Space to interact, defeat it in battle mode, reach the final object.
+Walk up to the NPC, press E to interact, defeat it in battle mode, reach the final object.
 
 ## 🖋️ Authors
 [@danilocb21](https://github.com/danilocb21): main programmer.
