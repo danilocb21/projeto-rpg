@@ -1228,7 +1228,20 @@ int main(int argc, char* argv[]) {
     CutsceneFrame cutscene[] = {frame_1, frame_2, frame_3, frame_4};
     int cutscene_amount = sizeof(cutscene) / sizeof(cutscene[0]);
 
-    SDL_Rect debug_buttons[] = {{25, 25, 25, 25}, {75, 25, 25, 25}, {125, 25, 25, 25}, {175, 25, 25, 25}, {225, 25, 25, 25}, {275, 25, 25, 25}};
+    Prop debug_buttons[6];
+    debug_buttons[0].texture = create_texture(game.renderer, "assets/sprites/misc/button-1.png");
+    debug_buttons[0].collision = (SDL_Rect){25, 25, 25, 25};
+    debug_buttons[1].texture = create_texture(game.renderer, "assets/sprites/misc/button-2.png");
+    debug_buttons[1].collision = (SDL_Rect){75, 25, 25, 25};
+    debug_buttons[2].texture = create_texture(game.renderer, "assets/sprites/misc/button-3.png");
+    debug_buttons[2].collision = (SDL_Rect){125, 25, 25, 25};
+    debug_buttons[3].texture = create_texture(game.renderer, "assets/sprites/misc/button-4.png");
+    debug_buttons[3].collision = (SDL_Rect){175, 25, 25, 25};
+    debug_buttons[4].texture = create_texture(game.renderer, "assets/sprites/misc/button-5.png");
+    debug_buttons[4].collision = (SDL_Rect){225, 25, 25, 25};
+    debug_buttons[5].texture = create_texture(game.renderer, "assets/sprites/misc/button-6.png");
+    debug_buttons[5].collision = (SDL_Rect){275, 25, 25, 25};
+    
     SDL_Rect animated_box;
 
     Uint32 last_ticks = SDL_GetTicks();
@@ -1310,10 +1323,11 @@ int main(int argc, char* argv[]) {
             case SDL_MOUSEBUTTONDOWN:
                 if (event.button.button == SDL_BUTTON_LEFT && debug_mode) {
                     SDL_Rect click = {event.button.x, event.button.y, 1, 1};
+                    SDL_Rect button_cols[] = {debug_buttons[0].collision, debug_buttons[1].collision, debug_buttons[2].collision, debug_buttons[3].collision, debug_buttons[4].collision, debug_buttons[5].collision};
 
-                    if (check_collision(&click, debug_buttons, 6)) {
+                    if (check_collision(&click, button_cols, 6)) {
                         for (int i = 0; i < 6; i++) {
-                            if (rects_intersect(&click, &debug_buttons[i], NULL)) {
+                            if (rects_intersect(&click, &debug_buttons[i].collision, NULL)) {
                                 switch (i) {
                                 case 0:
                                     // RESET PARA CUTSCENE:
@@ -2879,8 +2893,9 @@ int main(int argc, char* argv[]) {
         }
 
         if (debug_mode) {
-            SDL_SetRenderDrawColor(game.renderer, 255, 255, 255, 255);
-            SDL_RenderFillRects(game.renderer, debug_buttons, 6);
+            for (int i = 0; i < 6; i++) {
+                SDL_RenderCopy(game.renderer, debug_buttons[i].texture, NULL, &debug_buttons[i].collision);
+            }
         }
 
         SDL_RenderPresent(game.renderer);
