@@ -33,7 +33,7 @@ Project is: _complete_.
 - [ ] ⚔️ Different battles
 - [ ] 🚂 Different game modes
 - [ ] 🪙 Different endings
-- [ ] 👾 Debug mode
+- [x] 👾 Debug mode
 
 ## 📸 Screenshots
 
@@ -48,7 +48,7 @@ Project is: _complete_.
 ## 💾 Setup
 - __Windows:__
 
- We recommend using [_MSYS2_](http://msys2.org/) with the MINGW64 toolchain (more stable and simple). Install it at the official website, then search for "MSYS2 MINGW64 in your search bar (the blue one).
+ We recommend using [_MSYS2_](http://msys2.org/) with the MINGW64 toolchain (more stable and simple). Install it at the official website, then search for "MSYS2 MINGW64" in your search bar (the blue one).
 
  Now, just execute the following commands in there:
 
