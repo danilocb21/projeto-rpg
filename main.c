@@ -218,6 +218,7 @@ int main(int argc, char* argv[]) {
     SDL_Event event;
 
     // FADES:
+    FadeState cutscene_fade = {0.0, 0, true};
     FadeState open_world_fade = {0.0, 255, true};
     FadeState end_scene_fade = {0.0, 0, true};
 
@@ -836,10 +837,6 @@ int main(int argc, char* argv[]) {
         .timer = 0.0,
         .waiting_for_input = false
     };
-    if (!py_dialogue.text_font) {
-        fprintf(stderr, "Error loading font: %s", TTF_GetError());
-        return 1;
-    }
 
     Text py_dialogue_ad = {
         .writings = {"* Hm? Você conseguiu voltar?", "* Você é realmente duro na queda, Meneghetti. Devo admitir.", "* Eu ainda não desisti. Não pense que vai ser fácil.", "* Vamos ver se você vai ter a mesma sorte desta vez."},
@@ -853,10 +850,6 @@ int main(int argc, char* argv[]) {
         .timer = 0.0,
         .waiting_for_input = false
     };
-    if (!py_dialogue_ad.text_font) {
-        fprintf(stderr, "Error loading font: %s", TTF_GetError());
-        return 1;
-    }
 
     Text py_dialogue_ad_2 = {
         .writings = {"* Que insistência. Por que não desiste logo?", "* Não enquanto eu não acabar com você.", "* Hahahah. Não precisa ser tão agressivo."},
@@ -870,10 +863,6 @@ int main(int argc, char* argv[]) {
         .timer = 0.0,
         .waiting_for_input = false
     };
-    if (!py_dialogue_ad_2.text_font) {
-        fprintf(stderr, "Error loading font: %s", TTF_GetError());
-        return 1;
-    }
 
     Text py_dialogue_ad_3 = {
         .writings = {"* Acho que está um pouco difícil para você. Quer que eu diminua a dificuldade?", "* Cala a boca.", "* Desculpa, pessoal, eu tentei. Vamos para mais um round então."},
@@ -887,10 +876,6 @@ int main(int argc, char* argv[]) {
         .timer = 0.0,
         .waiting_for_input = false
     };
-    if (!py_dialogue_ad_3.text_font) {
-        fprintf(stderr, "Error loading font: %s", TTF_GetError());
-        return 1;
-    }
 
     Text py_dialogue_ad_4 = {
         .writings = {"* ...", "* Vamos logo com isso."},
@@ -904,10 +889,6 @@ int main(int argc, char* argv[]) {
         .timer = 0.0,
         .waiting_for_input = false
     };
-    if (!py_dialogue_ad_4.text_font) {
-        fprintf(stderr, "Error loading font: %s", TTF_GetError());
-        return 1;
-    }
 
     Text van_dialogue = {
         .writings = {"* Então este é o Python-móvel...", "* Agora tenho certeza de que meu inimigo está aqui..."},
@@ -921,10 +902,6 @@ int main(int argc, char* argv[]) {
         .timer = 0.0,
         .waiting_for_input = false
     };
-    if (!van_dialogue.text_font) {
-        fprintf(stderr, "Error loading font: %s", TTF_GetError());
-        return 1;
-    }
 
     Text lake_dialogue = {
         .writings = {"* O lago com animação te faz pensar sobre os esforços do criador deste universo.", "* Isso te enche de determinação.", "* Se fosse programado em Python não daria pra fazer isso."},
@@ -1251,6 +1228,11 @@ int main(int argc, char* argv[]) {
     bool interaction_request = false; // Indica se foi requisitada uma interação via tecla E no mundo aberto.
     bool meneghetti_arrived = false; // Indica a chegada do player na posição necessária na intro do mundo aberto.
     bool python_dialogue_finished = false; // Aponta se o player finalizou seu primeiro diálogo com o Mr. Python. Trigger para a batalha.
+    double pre_title_timer = 0.0; // Define a quantidade de tempo que o título permanece no início.
+    bool pre_title = true;
+    int cutscene_index = 0;
+    double cutscene_timer = 0.0;
+    bool last_frame_extend = false;
     bool debug_mode = false; // Indica o estado do modo de debug.
 
     double arrival_timer = 0.0;
@@ -1272,10 +1254,6 @@ int main(int argc, char* argv[]) {
     int base_py_damage = 2;
     int current_py_damage = base_py_damage;
     int death_count = 0;
-
-    if (game_state == OPEN_WORLD) {
-        meneghetti_arrived = true;
-    }
     
     while (running) {
         while (SDL_PollEvent(&event)) {
@@ -1303,42 +1281,198 @@ int main(int argc, char* argv[]) {
                 }
                 break;
             case SDL_MOUSEBUTTONDOWN:
-                if (event.button.button ==  SDL_BUTTON_LEFT && debug_mode) {
+                if (event.button.button == SDL_BUTTON_LEFT && debug_mode) {
                     SDL_Rect click = {event.button.x, event.button.y, 1, 1};
 
                     if (check_collision(&click, debug_buttons, 6)) {
                         for (int i = 0; i < 6; i++) {
                             if (rects_intersect(&click, &debug_buttons[i], NULL)) {
-                                switch (i)
-                                {
+                                switch (i) {
                                 case 0:
+                                    // RESET PARA CUTSCENE:
+                                    pre_title_timer = 0.0;
+                                    pre_title = true;
+                                    cutscene_index = 0;
+                                    cutscene_timer = 0.0;
+                                    cutscene_fade = (FadeState){0.0, 0, true};
+                                    last_frame_extend = false;
+                                    cutscene_music.has_played = false;
+
+                                    meneghetti.facing = DOWN;
+
                                     game_state = CUTSCENE;
                                     player_state = IDLE;
                                     break;
                                 case 1:
+                                    // RESET PARA TITLE SCREEN:
+                                    title_sound.has_played = false;
+
+                                    open_world_fade.alpha = 255;
+                                    open_world_fade.fading_in = true;
+                                    open_world_fade.timer = 0.0;
+
+                                    meneghetti_arrived = false;
+                                    scenario.collision = (SDL_Rect){0, -SCREEN_HEIGHT, SCREEN_WIDTH * 2, SCREEN_HEIGHT * 2};
+                                    meneghetti.collision = (SDL_Rect){(SCREEN_WIDTH / 2) - 10, (SCREEN_HEIGHT / 2) - 16, 19, 32};
+                                    meneghetti.interact_collision = (SDL_Rect){(SCREEN_WIDTH / 2) - 10, (SCREEN_HEIGHT / 2) + 16, 19, 25};
+                                    meneghetti_civic.collision = (SDL_Rect){scenario.collision.x + scenario.collision.w, scenario.collision.y + 731, 64, 42};
+
+                                    meneghetti.facing = DOWN;
+
+                                    meneghetti_arrived = false;
+                                    delay_started = false;
+                                    car_animation_timer = 0.0;
+                                    arrival_timer = 0.0;
+                                    python_dialogue_finished = false;
+                                    first_dialogue = false;
+                                    ambience.has_played = false;
+
                                     game_state = TITLE_SCREEN;
                                     player_state = IDLE;
                                     break;
                                 case 2:
+                                    // RESET PARA OPEN WORLD:
+                                    open_world_fade.alpha = 0;
+                                    open_world_fade.fading_in = false;
+                                    open_world_fade.timer = 0.0;
+
+                                    scenario.collision = (SDL_Rect){0, -SCREEN_HEIGHT, SCREEN_WIDTH * 2, SCREEN_HEIGHT * 2};
+                                    meneghetti.collision = (SDL_Rect){(SCREEN_WIDTH / 2) - 10, (SCREEN_HEIGHT / 2) - 16, 19, 32};
+                                    meneghetti.interact_collision = (SDL_Rect){(SCREEN_WIDTH / 2) - 10, (SCREEN_HEIGHT / 2) + 16, 19, 25};
+
+                                    meneghetti_arrived = true;
+                                    delay_started = false;
+                                    car_animation_timer = 0.0;
+                                    arrival_timer = 0.0;
+                                    python_dialogue_finished = false;
+                                    first_dialogue = false;
+                                    battle_ready = false;
+                                    ambience.has_played = false;
+                                    battle_music.has_played = false;
+
+                                    animated_shrink_timer = 0.0;
+                                    blink_timer = 0.0;
+                                    ivulnerability_counter = 0.0;
+                                    turn_timer = 0.0;
+
+                                    selected_button = FIGHT;
+                                    turn = CHOICE_TURN;
+                                    menu_pos = 0;
+                                    current_py_damage = base_py_damage;
+                                    food_amount = 4;
+                                    counter = 0.0;
+                                    senoidal_timer = 0.0;
+
                                     game_state = OPEN_WORLD;
                                     player_state = MOVABLE;
-                                    meneghetti_arrived = true;
                                     break;
                                 case 3:
+                                    // RESET PARA BATTLE SCREEN:
+                                    battle_ready = false;
+                                    counter = 0.0;
+                                    senoidal_timer = 0.0;
+                                    on_dialogue = false;
+                                    first_dialogue = false;
+                                    animated_box_inited = false;
+                                    soul_ivulnerable = false;
+                                    enemy_attack_selected = false;
+                                    tried_to_attack = false;
+                                    should_expand_back = false;
+                                    first_insult = true;
+                                    first_explain = true;
+
+                                    animated_shrink_timer = 0.0;
+                                    blink_timer = 0.0;
+                                    ivulnerability_counter = 0.0;
+                                    turn_timer = 0.0;
+
+                                    selected_button = FIGHT;
+                                    turn = CHOICE_TURN;
+                                    menu_pos = 0;
+                                    current_py_damage = base_py_damage;
+                                    food_amount = 4;
+
+                                    bar_attack.collision.x = bar_target.collision.x + 20;
+
+                                    mr_python_head.health = 200;
+                                    mr_python_head.texture = python_head_animation.frames[0];
+                                    mr_python_arms.texture = python_arms_animation.frames[0];
+                                    mr_python_legs.texture = python_legs_animation.frames[0];
+
+                                    soul_animation.counter = 0;
+                                    slash_animation.counter = 0;
+                                    bar_attack_animation.counter = 0;
+
+                                    battle_sounds[0].has_played = false;
+                                    battle_sounds[1].has_played = false;
+                                    battle_sounds[2].has_played = false;
+                                    battle_sounds[3].has_played = false;
+                                    battle_sounds[4].has_played = false;
+                                    slash_sound.has_played = false;
+                                    enemy_hit_sound.has_played = false;
+                                    eat_sound.has_played = false;
+                                    battle_appears.has_played = false;
+
+                                    python_attacks(game.renderer, &soul, animated_box, &meneghetti.health, current_py_damage, 0, &soul_ivulnerable, python_props, 0, 0, battle_sounds, true);
+
                                     game_state = BATTLE_SCREEN;
                                     player_state = IN_BATTLE;
                                     break;
                                 case 4:
+                                    // RESET PARA DEATH SCREEN:
+                                    death_counter = 0.0;
+                                    soul_break_sound.has_played = false;
+
                                     game_state = DEATH_SCREEN;
                                     player_state = DEAD;
                                     break;
                                 case 5:
+                                    // RESET PARA FINAL SCREEN:
+                                    end_scene_fade.alpha = 0;
+                                    end_scene_fade.fading_in = false;
+                                    end_scene_fade.timer = 0.0;
+
                                     game_state = FINAL_SCREEN;
                                     player_state = IDLE;
                                     break;
                                 default:
                                     break;
                                 }
+
+                                reset_dialogue(&cutscene_1);
+                                reset_dialogue(&cutscene_2);
+                                reset_dialogue(&cutscene_3);
+                                reset_dialogue(&cutscene_4);
+                                reset_dialogue(&py_dialogue);
+                                reset_dialogue(&py_dialogue_ad);
+                                reset_dialogue(&py_dialogue_ad_2);
+                                reset_dialogue(&py_dialogue_ad_3);
+                                reset_dialogue(&py_dialogue_ad_4);
+                                reset_dialogue(&van_dialogue);
+                                reset_dialogue(&lake_dialogue);
+                                reset_dialogue(&arrival_dialogue);
+                                reset_dialogue(&fight_start_txt);
+                                reset_dialogue(&fight_generic_txt);
+                                reset_dialogue(&fight_leave_txt);
+                                reset_dialogue(&fight_spare_txt);
+                                reset_dialogue(&fight_act_txt);
+                                reset_dialogue(&insult_txt);
+                                reset_dialogue(&insult_generic_txt);
+                                reset_dialogue(&explain_txt);
+                                reset_dialogue(&explain_generic_txt);
+                                reset_dialogue(&picanha_txt);
+                                reset_dialogue(&no_food_txt);
+                                reset_dialogue(&bubble_speech_1);
+                                reset_dialogue(&bubble_speech_2);
+                                reset_dialogue(&bubble_speech_3);
+                                reset_dialogue(&end_dialogue);
+
+                                soul.collision = (SDL_Rect){(SCREEN_WIDTH / 2) - 10, (SCREEN_HEIGHT / 2) - 10, 20, 20};
+                                soul.texture = soul_animation.frames[0];
+                            
+                                interaction_request = false;
+                                Mix_HaltChannel(MUSIC_CHANNEL);
+                                Mix_HaltChannel(SFX_CHANNEL);
                             }
                         }
                     }
@@ -1354,12 +1488,6 @@ int main(int argc, char* argv[]) {
         last_ticks = now;
 
         if (game_state == CUTSCENE) {
-            static double pre_title_timer = 0.0;
-            static bool pre_title = true;
-            static int cutscene_index = 0;
-            static double cutscene_timer = 0.0;
-            static FadeState fade = {0, 0, true};
-            static bool last_frame_extend = false;
 
             SDL_SetRenderDrawColor(game.renderer, 0, 0, 0, 0);
 
@@ -1381,37 +1509,37 @@ int main(int argc, char* argv[]) {
                 CutsceneFrame *current_frame = &cutscene[cutscene_index];
                 cutscene_timer += dt;
 
-                if (fade.fading_in) {
-                    fade.timer += dt;
-                    fade.alpha = (Uint8)((fade.timer / 1.0) * 255);
-                    if (fade.timer >= 1.0) {
-                        fade.alpha = 255;
-                        fade.fading_in = false;
-                        fade.timer = 0.0;
+                if (cutscene_fade.fading_in) {
+                    cutscene_fade.timer += dt;
+                    cutscene_fade.alpha = (Uint8)((cutscene_fade.timer / 1.0) * 255);
+                    if (cutscene_fade.timer >= 1.0) {
+                        cutscene_fade.alpha = 255;
+                        cutscene_fade.fading_in = false;
+                        cutscene_fade.timer = 0.0;
                     }
                 }
                 else if (cutscene_timer >= current_frame->duration - 1.0) {
-                    fade.timer += dt;
-                    fade.alpha = 255 - (Uint8)((fade.timer / 1.0) * 255);
-                    if (fade.timer >= 1.0) {
-                        fade.alpha = 0;
+                    cutscene_fade.timer += dt;
+                    cutscene_fade.alpha = 255 - (Uint8)((cutscene_fade.timer / 1.0) * 255);
+                    if (cutscene_fade.timer >= 1.0) {
+                        cutscene_fade.alpha = 0;
                     }
                 }
 
                 if (cutscene_index == cutscene_amount - 1 && cutscene_timer >= current_frame->duration - 3.0 && !last_frame_extend) {
                     last_frame_extend = true;
-                    fade.timer = 0.0;
+                    cutscene_fade.timer = 0.0;
                 }
 
                 if (last_frame_extend) {
-                    fade.timer += dt;
-                    fade.alpha = 255 - (Uint8)((fade.timer / 5.0) * 255);
-                    if (fade.timer >= 5.0) {
-                        fade.alpha = 0;
+                    cutscene_fade.timer += dt;
+                    cutscene_fade.alpha = 255 - (Uint8)((cutscene_fade.timer / 5.0) * 255);
+                    if (cutscene_fade.timer >= 5.0) {
+                        cutscene_fade.alpha = 0;
                     }
                 }
 
-                SDL_SetTextureAlphaMod(current_frame->image, fade.alpha);
+                SDL_SetTextureAlphaMod(current_frame->image, cutscene_fade.alpha);
                 SDL_RenderClear(game.renderer);
                 SDL_RenderCopy(game.renderer, current_frame->image, NULL, NULL);
 
@@ -1422,14 +1550,14 @@ int main(int argc, char* argv[]) {
                 if (cutscene_timer >= current_frame->duration + 0.5 && !last_frame_extend) {
                     cutscene_timer = 0.0;
                     cutscene_index++;
-                    fade.fading_in = true;
-                    fade.timer = 0.0;
-                    fade.alpha = 0;
+                    cutscene_fade.fading_in = true;
+                    cutscene_fade.timer = 0.0;
+                    cutscene_fade.alpha = 0;
 
                     if (cutscene_index >= cutscene_amount) {
                         cutscene_index = cutscene_amount - 1;
                         last_frame_extend = true;
-                        fade.timer = 0.0;
+                        cutscene_fade.timer = 0.0;
                     }
                 }
 
@@ -1438,7 +1566,7 @@ int main(int argc, char* argv[]) {
                     Mix_HaltChannel(MUSIC_CHANNEL);
                     SDL_SetTextureAlphaMod(current_frame->image, 255);
                 }
-                if (last_frame_extend && fade.timer >= 3.0) {
+                if (last_frame_extend && cutscene_fade.timer >= 3.0) {
                     game_state = TITLE_SCREEN;
                     SDL_SetTextureAlphaMod(current_frame->image, 255);
                 }
@@ -2878,6 +3006,8 @@ void create_dialogue(Character *player, SDL_Renderer *render, Text *text, int *p
     static bool prev_e_pressed = false;
     e_cooldown += dt;
     bool e_now = keys[SDL_SCANCODE_E];
+
+    static int counters[] = {0, 0};
     
     bool e_pressed = false;
     if (e_now && !prev_e_pressed && e_cooldown >= 0.2) {
@@ -2964,9 +3094,24 @@ void create_dialogue(Character *player, SDL_Renderer *render, Text *text, int *p
         }
     }
 
+    static int last_cur_str = -1;
     static double sfx_timer = 0.0;
     const double sfx_cooldown = 0.03;
     sfx_timer += dt;
+
+    if (text->cur_str == 0 && text->cur_byte == 0) {
+        e_cooldown = 0.0;
+        counters[0] = 0;
+        counters[1] = 0;
+        last_cur_str = -1;
+    }
+
+    if (text->cur_str != last_cur_str) {
+        e_cooldown = 0.0;
+        counters[0] = 0;
+        counters[1] = 0;
+        last_cur_str = text->cur_str;
+    }
 
     if (!text->waiting_for_input) {
         *anim_timer += dt;
@@ -3169,7 +3314,6 @@ void create_dialogue(Character *player, SDL_Renderer *render, Text *text, int *p
         }
     }
 
-    static int counters[] = {0, 0};
     if (text->on_frame[text->cur_str] != NONE) {
         switch(text->on_frame[text->cur_str]) {
             case MENEGHETTI:
