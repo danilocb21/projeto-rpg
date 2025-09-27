@@ -147,7 +147,7 @@ sudo pacman -S sdl2 gcc make cmake
 ```
 
 ## 🎮 Usage
-WASD to walk, E to interact, TAB to go back, ENTER to begin the game.
+WASD to walk, E to interact, TAB to go back, ENTER to begin the game. If you wish to test and debug the code, press F7 to open the game state button chart.
 
 Walk up to the NPC, press E to interact, defeat it in battle mode, reach the final object.
 
