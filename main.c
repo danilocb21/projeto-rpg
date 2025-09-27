@@ -72,12 +72,6 @@ typedef struct {
     int facing;
 } Prop;
 
-// PROJÉTIL DE PRECISÃO:
-typedef struct {
-    SDL_Texture* texture;
-    SDL_FRect collision;
-} Projectile;
-
 // PARÂMETROS DE ANIMAÇÃO:
 typedef struct {
     SDL_Texture **frames;
@@ -85,6 +79,13 @@ typedef struct {
     int counter;
     int count;
 } Animation;
+
+// PROJÉTIL DE PRECISÃO:
+typedef struct {
+    SDL_Texture* texture;
+    SDL_FRect collision;
+    Animation animation;
+} Projectile;
 
 // PARÂMETROS DE DIÁLOGO:
 typedef struct {
@@ -416,11 +417,29 @@ int main(int argc, char* argv[]) {
 
     Animation python_mother_animation = {
         .frames = (SDL_Texture*[]){create_texture(game.renderer, "assets/sprites/battle/python-1.png"), create_texture(game.renderer, "assets/sprites/battle/python-2.png")},
+        .timer = 0.0,
+        .counter = 0,
         .count = 2
     };
 
     Animation python_baby_animation = {
         .frames = (SDL_Texture*[]){create_texture(game.renderer, "assets/sprites/battle/python-baby-1.png"), create_texture(game.renderer, "assets/sprites/battle/python-baby-2.png")},
+        .timer = 0.0,
+        .counter = 0,
+        .count = 2
+    };
+
+    Animation python_barrier_left_animation = {
+        .frames = (SDL_Texture*[]){create_texture(game.renderer, "assets/sprites/battle/python-barrier-left-1.png"), create_texture(game.renderer, "assets/sprites/battle/python-barrier-left-2.png")},
+        .timer = 0.0,
+        .counter = 0,
+        .count = 2
+    };
+
+    Animation python_barrier_right_animation = {
+        .frames = (SDL_Texture*[]){create_texture(game.renderer, "assets/sprites/battle/python-barrier-right-1.png"), create_texture(game.renderer, "assets/sprites/battle/python-barrier-right-2.png")},
+        .timer = 0.0,
+        .counter = 0,
         .count = 2
     };
 
@@ -681,24 +700,24 @@ int main(int argc, char* argv[]) {
     Projectile parenthesis_enclosure[6];
     parenthesis_enclosure[0].texture = create_texture(game.renderer, "assets/sprites/battle/brackets-1.png");
     SDL_QueryTexture(parenthesis_enclosure[0].texture, NULL, NULL, &attack_widths, &attack_heights);
-    parenthesis_enclosure[0].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
+    parenthesis_enclosure[0].collision = (SDL_FRect){0, 0, attack_widths, attack_heights * 2};
     parenthesis_enclosure[1].texture = create_texture(game.renderer, "assets/sprites/battle/brackets-2.png");
     SDL_QueryTexture(parenthesis_enclosure[1].texture, NULL, NULL, &attack_widths, &attack_heights);
-    parenthesis_enclosure[1].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
+    parenthesis_enclosure[1].collision = (SDL_FRect){0, 0, attack_widths, attack_heights * 2};
     parenthesis_enclosure[2].texture = create_texture(game.renderer, "assets/sprites/battle/key-1.png");
     SDL_QueryTexture(parenthesis_enclosure[2].texture, NULL, NULL, &attack_widths, &attack_heights);
-    parenthesis_enclosure[2].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
+    parenthesis_enclosure[2].collision = (SDL_FRect){0, 0, attack_widths, attack_heights * 2};
     parenthesis_enclosure[3].texture = create_texture(game.renderer, "assets/sprites/battle/key-2.png");
     SDL_QueryTexture(parenthesis_enclosure[3].texture, NULL, NULL, &attack_widths, &attack_heights);
-    parenthesis_enclosure[3].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
+    parenthesis_enclosure[3].collision = (SDL_FRect){0, 0, attack_widths, attack_heights * 2};
     parenthesis_enclosure[4].texture = create_texture(game.renderer, "assets/sprites/battle/parenthesis-1.png");
     SDL_QueryTexture(parenthesis_enclosure[4].texture, NULL, NULL, &attack_widths, &attack_heights);
-    parenthesis_enclosure[4].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
+    parenthesis_enclosure[4].collision = (SDL_FRect){0, 0, attack_widths, attack_heights * 2};
     parenthesis_enclosure[5].texture = create_texture(game.renderer, "assets/sprites/battle/parenthesis-2.png");
     SDL_QueryTexture(parenthesis_enclosure[5].texture, NULL, NULL, &attack_widths, &attack_heights);
-    parenthesis_enclosure[5].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
+    parenthesis_enclosure[5].collision = (SDL_FRect){0, 0, attack_widths, attack_heights * 2};
 
-    Projectile python_mother[4];
+    Projectile python_mother[3];
     python_mother[0].texture = python_mother_animation.frames[0];
     SDL_QueryTexture(python_mother[0].texture, NULL, NULL, &attack_widths, &attack_heights);
     python_mother[0].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
@@ -708,11 +727,19 @@ int main(int argc, char* argv[]) {
     python_mother[2].texture = python_baby_animation.frames[0];
     SDL_QueryTexture(python_mother[2].texture, NULL, NULL, &attack_widths, &attack_heights);
     python_mother[2].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
-    python_mother[3].texture = python_baby_animation.frames[1];
-    SDL_QueryTexture(python_mother[3].texture, NULL, NULL, &attack_widths, &attack_heights);
-    python_mother[3].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
+    python_mother[2].animation = python_baby_animation;
 
-    Projectile *python_props[] = {command_rain, parenthesis_enclosure, python_mother};
+    Projectile python_barrier[2];
+    python_barrier[0].texture = python_barrier_left_animation.frames[0];
+    SDL_QueryTexture(python_barrier[0].texture, NULL, NULL, &attack_widths, &attack_heights);
+    python_barrier[0].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
+    python_barrier[0].animation = python_barrier_left_animation;
+    python_barrier[1].texture = python_barrier_right_animation.frames[1];
+    SDL_QueryTexture(python_barrier[1].texture, NULL, NULL, &attack_widths, &attack_heights);
+    python_barrier[1].collision = (SDL_FRect){0, 0, attack_widths, attack_heights};
+    python_barrier[1].animation = python_barrier_right_animation;
+
+    Projectile *python_props[] = {command_rain, parenthesis_enclosure, python_mother, python_barrier};
 
     SDL_Texture* damage_numbers[] = {create_texture(game.renderer, "assets/sprites/battle/number-10.png"), create_texture(game.renderer, "assets/sprites/battle/number-20.png"), create_texture(game.renderer, "assets/sprites/battle/number-30.png"), create_texture(game.renderer, "assets/sprites/battle/number-40.png")};
     Prop damage;
@@ -1413,8 +1440,6 @@ int main(int argc, char* argv[]) {
                                     eat_sound.has_played = false;
                                     battle_appears.has_played = false;
 
-                                    python_attacks(game.renderer, &soul, animated_box, &meneghetti.health, current_py_damage, 0, &soul_ivulnerable, python_props, 0, 0, battle_sounds, true);
-
                                     game_state = BATTLE_SCREEN;
                                     player_state = IN_BATTLE;
                                     break;
@@ -1438,6 +1463,8 @@ int main(int argc, char* argv[]) {
                                 default:
                                     break;
                                 }
+
+                                python_attacks(game.renderer, &soul, animated_box, &meneghetti.health, current_py_damage, 0, &soul_ivulnerable, python_props, 0, 0, battle_sounds, true);
 
                                 reset_dialogue(&cutscene_1);
                                 reset_dialogue(&cutscene_2);
@@ -2208,7 +2235,7 @@ int main(int argc, char* argv[]) {
                         int random_dialogue;
 
                         if (!enemy_attack_selected) {
-                            enemy_attack = randint(1, 3);
+                            enemy_attack = randint(1, 4);
                             random_dialogue = randint(1, 3);
 
                             enemy_attack_selected = true;
@@ -2279,7 +2306,7 @@ int main(int argc, char* argv[]) {
                                 }
 
                                 if (turn_timer >= 0.5) {
-                                    python_attacks(game.renderer, &soul, animated_box, &meneghetti.health, current_py_damage, enemy_attack, &soul_ivulnerable, python_props, dt, turn_timer, battle_sounds, false);
+                                    python_attacks(game.renderer, &soul, animated_box, &meneghetti.health, current_py_damage, enemy_attack, &soul_ivulnerable, python_props, dt, turn_timer, battle_sounds, false); // ATAQUE SELECIONADO.
                                     switch (random_dialogue) {
                                         case 1: 
                                             create_dialogue(&meneghetti, game.renderer, &bubble_speech_1, &player_state, &game_state, dt, NULL, NULL, &anim_timer, dialogue_voices, &bubble_speech);
@@ -3414,7 +3441,7 @@ void python_attacks(SDL_Renderer *render, Prop *soul, SDL_Rect battle_box, int *
     static double vel_y[15] = {0};
     static double angles[15] = {0};
 
-    static int alpha_counter = 0;
+    static double alpha_counter = 0;
 
     static bool played_appear_sound = false;
 
@@ -3427,13 +3454,63 @@ void python_attacks(SDL_Renderer *render, Prop *soul, SDL_Rect battle_box, int *
     if (!clear) {    
         switch(attack_index) {
             case 1:
+            case 4:
                 if (!attack_active && turn_timer <= 8.0) {
-                    attack_active = true;
-                    spawn_timer = 0.0;
-                    objects_spawned = 0;
+                    if (turn_timer <= 0.8) {
+                        props[3][0].collision.x = battle_box.x + battle_box.w;
+                        props[3][0].collision.y = battle_box.y;
+                        props[3][1].collision.x = battle_box.x - props[3][1].collision.w;
+                        props[3][1].collision.y = battle_box.y + battle_box.h - props[3][1].collision.h;
+                    }
+                    if (attack_index == 4) {
+                        alpha_counter += dt * 300;
+                        if (alpha_counter >= 255) alpha_counter = 255;
+                        SDL_SetTextureAlphaMod(props[3][0].animation.frames[0], alpha_counter);
+                        SDL_SetTextureAlphaMod(props[3][1].animation.frames[0], alpha_counter);
+                        SDL_SetTextureAlphaMod(props[3][0].animation.frames[1], alpha_counter);
+                        SDL_SetTextureAlphaMod(props[3][1].animation.frames[1], alpha_counter);
+                        if (!played_appear_sound) {
+                            Mix_PlayChannel(DEFAULT_CHANNEL, appear_sound, 0);
+                            played_appear_sound = true;
+                        }
+
+                        if (props[3][0].collision.x >= battle_box.x - 10 || props[3][1].collision.x <= battle_box.x - 10) {
+                            if (props[3][0].collision.x >= battle_box.x - 10) props[3][0].collision.x -= 80.0 * dt;
+                            if (props[3][1].collision.x <= battle_box.x - 10) props[3][1].collision.x += 80.0 * dt;
+                        }
+                        else {
+                            attack_active = true;
+                            spawn_timer = 0.0;
+                            objects_spawned = 0;
+                        }
+                    }
+                    else {
+                        attack_active = true;
+                        spawn_timer = 0.0;
+                        objects_spawned = 0;
+                    }
 
                     for (int i = 0; i < 15; i++) {
                         created_object[i] = false;
+                    }
+                }
+
+                if (attack_index == 4) {
+                    props[3][0].texture = animate_sprite(&props[3][0].animation, dt, 0.4, false);
+                    props[3][1].texture = animate_sprite(&props[3][1].animation, dt, 0.4, false);
+
+                    SDL_RenderCopyF(render, props[3][0].texture, NULL, &props[3][0].collision);
+                    SDL_RenderCopyF(render, props[3][1].texture, NULL, &props[3][1].collision);
+
+                    if (!*ivulnerable && rects_intersect(&soul->collision, NULL, &props[3][0].collision)) {
+                        Mix_PlayChannel(DEFAULT_CHANNEL, hit_sound, 0);
+                        *player_health -= damage;
+                        *ivulnerable = true;
+                    }
+                    if (!*ivulnerable && rects_intersect(&soul->collision, NULL, &props[3][1].collision)) {
+                        Mix_PlayChannel(DEFAULT_CHANNEL, hit_sound, 0);
+                        *player_health -= damage;
+                        *ivulnerable = true;
                     }
                 }
 
@@ -3483,6 +3560,8 @@ void python_attacks(SDL_Renderer *render, Prop *soul, SDL_Rect battle_box, int *
 
                 if (turn_timer >= 9.5) {
                     attack_active = false;
+                    played_appear_sound = false;
+                    alpha_counter = 0.0;
 
                     bool all_cleared = true;
                     for (int i = 0; i < 15; i++) {
@@ -3511,7 +3590,7 @@ void python_attacks(SDL_Renderer *render, Prop *soul, SDL_Rect battle_box, int *
 
                 spawn_timer += dt;
 
-                if (attack_active && spawn_timer >= 0.75 && objects_spawned < 6) {
+                if (attack_active && spawn_timer >= 0.8 && objects_spawned < 6) {
                     for (int i = 0; i < 6; i += 2) {
                         if (!created_object[i] && !created_object[i + 1]) {
                             Mix_PlayChannel(DEFAULT_CHANNEL, appear_sound, 0);
@@ -3657,22 +3736,8 @@ void python_attacks(SDL_Renderer *render, Prop *soul, SDL_Rect battle_box, int *
 
                 for (int i = 0; i < 15; i++) {
                     if (created_object[i]) {
-                        static double animation_counter = 0.0;
-                        static int frame = 0;
-                        animation_counter += dt;
 
-                        if (frame > 1) frame = 0;
-
-                        if (animation_counter >= 0.1) {
-                            if (frame == 0) {
-                                active_objects[i].texture = props[2][2].texture;
-                            }
-                            else {
-                                active_objects[i].texture = props[2][3].texture;
-                            }
-                            frame++;
-                            animation_counter = 0.0;
-                        }
+                        active_objects[i].texture = animate_sprite(&active_objects->animation, dt, 0.2, false);
                             
                         active_objects[i].collision.x += vel_x[i] * dt;
                         active_objects[i].collision.y += vel_y[i] * dt;
@@ -3697,6 +3762,7 @@ void python_attacks(SDL_Renderer *render, Prop *soul, SDL_Rect battle_box, int *
 
                 if (turn_timer >= 9.5) {
                     attack_active = false;
+                    played_appear_sound = false;
                     alpha_counter = 0.0;
 
                     bool all_cleared = true;
@@ -3722,7 +3788,7 @@ void python_attacks(SDL_Renderer *render, Prop *soul, SDL_Rect battle_box, int *
         spawn_timer = 0.0;
         objects_spawned = 0;
         attack_active = false;
-        alpha_counter = 0;
+        alpha_counter = 0.0;
 
         for (int i = 0; i < 15; i ++) {
             created_object[i] = false;
