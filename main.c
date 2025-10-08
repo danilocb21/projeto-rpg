@@ -10,6 +10,9 @@
 #include <string.h>
 #include <time.h>
 #include <stdarg.h>
+#include <locale.h>
+#include <wchar.h>
+#include <wctype.h>
 #include "get_username.h"
 
 // TELA:
@@ -298,6 +301,7 @@ void clean_tracked_resources(void);
 // FUNÇÕES AUXILIARES:
 static int utf8_charlen(const char *s);
 static int utf8_copy_char(const char *s, char *out);
+char *utf8_to_upper(const char *s);
 int renderitem_cmp(const void *pa, const void *pb);
 int randint(int min, int max);
 int choice(int count, ...);
@@ -1301,7 +1305,7 @@ int main(int argc, char* argv[]) {
     };
 
     Dialogue chatgpt_dialogue_1 = {
-        .writings = {"* Olá. Estou aqui apenas para te dar um aviso, jogador.", "* Você chegou ao fim do primeiro ciclo deste mundo.", "* Os criadores me mandaram aqui para anunciar o 'fim do alpha'.", "* Muita coisa ainda está para ser escrita - novos lugares, rostos, conflitos...", "* O código que está sendo compilado em sua máquina está apenas no começo.", "* Enquanto não houver progresso... Continue com sua jornada atual."},
+        .writings = {"* Olá, Meneghetti. Estou aqui apenas para fornecer um aviso.", "* Você chegou ao fim do primeiro ciclo deste mundo.", "* Os criadores me enviaram para anunciar o 'fim da alpha'.", "* Muita coisa ainda está para ser escrita - novos lugares, rostos, conflitos...", "* O código que roda em sua máquina é apenas o início de algo muito maior.", "* Até lá... Continue com sua jornada. Este mundo ainda respira."},
         .text_font = dialogue_text_font,
         .on_frame = {FACE_CHATGPT, FACE_CHATGPT, FACE_CHATGPT, FACE_CHATGPT, FACE_CHATGPT, FACE_CHATGPT},
         .text_color = white,
@@ -1314,9 +1318,9 @@ int main(int argc, char* argv[]) {
     };
 
     Dialogue chatgpt_dialogue_2 = {
-        .writings = {"* Não tenho mais o que te dizer.", "* Até mais, Meneghetti. Ou deveria te chamar de USER?"},
+        .writings = {"* Não tenho mais o que te dizer.", "* Até mais, Meneghetti...", "* Ou devo chamá-lo de USER?"},
         .text_font = dialogue_text_font,
-        .on_frame = {FACE_CHATGPT, FACE_CHATGPT},
+        .on_frame = {FACE_CHATGPT, FACE_CHATGPT, FACE_CHATGPT},
         .text_color = white,
         .char_count = 0,
         .text_box = {0, 0, 0, 0},
@@ -1331,8 +1335,10 @@ int main(int argc, char* argv[]) {
         char *gpt_mystic_dialogue = malloc(MAX_DIALOGUE_CHAR);
 
         if (gpt_mystic_dialogue) {
-            snprintf(gpt_mystic_dialogue, MAX_DIALOGUE_CHAR, "* Até mais, Meneghetti... Ou deveria te chamar de %s?", user);
-            chatgpt_dialogue_2.writings[1] = gpt_mystic_dialogue;
+            char *upper = utf8_to_upper(user);
+            snprintf(gpt_mystic_dialogue, MAX_DIALOGUE_CHAR, "* Ou devo chamá-lo de %s?", upper);
+            chatgpt_dialogue_2.writings[2] = gpt_mystic_dialogue;
+            free(upper);
         }
         free(user);
     }
@@ -4331,6 +4337,32 @@ static int utf8_copy_char(const char *s, char *out) {
 
     out[n] = '\0';
     return n;
+}
+
+char *utf8_to_upper(const char *s) {
+    if (!s) return NULL;
+    setlocale(LC_CTYPE, ""); /* usa a localidade do sistema */
+
+    size_t wlen = mbstowcs(NULL, s, 0);
+    if (wlen == (size_t)-1) return strdup(s); /* fallback */
+
+    wchar_t *w = malloc((wlen + 1) * sizeof(wchar_t));
+    if (!w) return strdup(s);
+    mbstowcs(w, s, wlen + 1);
+
+    for (size_t i = 0; i < wlen; ++i) {
+        w[i] = towupper(w[i]);
+    }
+
+    size_t outlen = wcstombs(NULL, w, 0);
+    if (outlen == (size_t)-1) { free(w); return strdup(s); }
+
+    char *out = malloc(outlen + 1);
+    if (!out) { free(w); return strdup(s); }
+    wcstombs(out, w, outlen + 1);
+
+    free(w);
+    return out;
 }
 
 int renderitem_cmp(const void *pa, const void *pb) {
