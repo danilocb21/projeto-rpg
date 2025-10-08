@@ -13,6 +13,7 @@ pkg_check_modules(SDL2_MIXER REQUIRED SDL2_mixer)
 
 add_executable(c_tale
     main.c
+    get_username.c
 )
 
 target_include_directories(c_tale PRIVATE
