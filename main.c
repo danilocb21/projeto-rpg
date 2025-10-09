@@ -457,11 +457,12 @@ int main(int argc, char* argv[]) {
     dialogue_faces[FACE_PYTHON].frames = malloc(sizeof(SDL_Texture*) * dialogue_faces[FACE_PYTHON].count);
     dialogue_faces[FACE_PYTHON].frames[0] = create_texture(game.renderer, "assets/sprites/characters/python-dialogue-1.png");
     dialogue_faces[FACE_PYTHON].frames[1] = create_texture(game.renderer, "assets/sprites/characters/python-dialogue-2.png");
-    dialogue_faces[FACE_CHATGPT].count = 1;
+    dialogue_faces[FACE_CHATGPT].count = 2;
     dialogue_faces[FACE_CHATGPT].counter = 0;
     dialogue_faces[FACE_CHATGPT].timer = 0.0;
     dialogue_faces[FACE_CHATGPT].frames = malloc(sizeof(SDL_Texture*) * dialogue_faces[FACE_CHATGPT].count);
     dialogue_faces[FACE_CHATGPT].frames[0] = create_texture(game.renderer, "assets/sprites/characters/chatgpt-dialogue-1.png");
+    dialogue_faces[FACE_CHATGPT].frames[1] = create_texture(game.renderer, "assets/sprites/characters/chatgpt-dialogue-2.png");
 
     Animation title_text_anim = {
         .frames = (SDL_Texture*[]){create_text(game.renderer, "APERTE ENTER PARA COMEÇAR", title_text_font, gray), NULL},
